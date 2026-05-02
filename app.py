@@ -186,3 +186,170 @@ if st.sidebar.button("Logout"):
 if refresh:
     time.sleep(15)
     st.rerun()
+    import streamlit as st
+import pandas as pd
+import plotly.express as px
+import gspread
+from google.oauth2.service_account import Credentials
+import datetime
+
+# --- CONFIG & STYLING ---
+st.set_page_config(page_title="Laijau Dashboard", layout="wide")
+
+# १. CSS FOR PREMIUM LOOK (NO EMOJIS)
+st.markdown("""
+    <style>
+    [data-testid="stSidebar"] { background-color: #0E1117; border-right: 1px solid #333; }
+    .stMetric { background-color: #1E1E1E; padding: 15px; border-radius: 10px; border: 1px solid #333; }
+    div.stButton > button { width: 100%; border-radius: 5px; height: 3em; }
+    </style>
+""", unsafe_allow_html=True)
+
+# २. GOOGLE SHEETS CONNECTION
+try:
+    scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+    creds = Credentials.from_service_account_file("credentials.json", scopes=scope)
+    client = gspread.authorize(creds)
+    sheet_id = "1NEXA1QP-JGcNO9DYBBSg6PNpr-0IZp10h_E7b2RD7oY" 
+    
+    sh = client.open_by_key(sheet_id)
+    
+    # Sales Data (Index 0)
+    ws_new = sh.worksheet("New showroom")
+    ws_old = sh.worksheet("Old Showroom")
+    df_new=pd.DataFrame(ws_new.get_all_records())
+    df_old=pd.DataFrame(ws_old.get_all_records())
+    df_sale_raw=pd.concat([df_new, df_old], ignore_index=True)
+    df_sale_raw['Date'] = pd.to_datetime(df_sale_raw['Date'])
+    
+    # Stock Data (Index 2)
+    ws_stock = sh.worksheet("stock")
+    df_stock_raw = pd.DataFrame(ws_stock.get_all_records())
+except Exception as e:
+    st.error(f"Connection Error: {e}")
+    st.stop()
+
+# --- SIDEBAR NAVIGATION ---
+with st.sidebar:
+    st.markdown("""
+        <div style='text-align: center; padding: 10px; background-color: #1E1E1E; border-radius: 10px; margin-bottom: 20px; border: 1px solid #00CC96;'>
+            <h1 style='color: #00CC96; margin: 0; font-family: sans-serif;'>LAIJAU</h1>
+            <p style='color: #888; font-size: 12px; margin: 0;'>Business Analytics v2.0</p>
+        </div>
+    """, unsafe_allow_html=True)
+
+    app_mode = st.radio("Navigation", ["Sales Dashboard", "Stock Management", "Attendance"])
+    st.divider()
+    st.success("System Online")
+    st.caption(f"Admin: Yogesh Khatri | {datetime.date.today()}")
+
+if app_mode == "Sales Dashboard":
+    st.title("Sales Analysis")
+    
+    # यदि डाटा नै छैन भने खाली देखाउने
+    if df_sale_raw.empty:
+        st.warning("गुगल सिटमा सेल्स डाटा भेटिएन। कृपया सिटको पहिलो रो मा 'Date', 'Showroom', र 'Total' लेखिएको छ कि छैन चेक गर।")
+    else:
+        with st.expander("Filters", expanded=True):
+            showroom_filter = st.selectbox("Select View", ["Both", "New Showroom", "Old Showroom"], index=0)
+
+        df_f = df_sale_raw.copy()
+        if showroom_filter != "Both":
+            df_f = df_f[df_f["Showroom"] == showroom_filter]
+
+        if not df_f.empty:
+            m1, m2, m3 = st.columns(3)
+            total_revenue = df_f['Total'].sum()
+            best_day_row = df_f.loc[df_f['Total'].idxmax()]
+            
+            m1.metric("Total Revenue", f"Rs {total_revenue:,.0f}")
+            m2.metric("Best Sales Day", f"{best_day_row['Date'].strftime('%b %d')}", f"Rs {best_day_row['Total']:,.0f}")
+            m3.metric("Avg Sale", f"Rs {df_f['Total'].mean():,.0f}")
+
+            st.subheader("Daily Sales Trend")
+            daily_sales = df_f.groupby('Date')['Total'].sum().reset_index()
+            fig_daily = px.area(daily_sales, x="Date", y="Total", template="plotly_dark", 
+                                line_shape="spline", color_discrete_sequence=['#00CC96'])
+            st.plotly_chart(fig_daily, use_container_width=True)
+# --- 2. STOCK MANAGEMENT (FIXED CONFLICT) ---
+elif app_mode == "Stock Management":
+    st.title("Stock Inventory Control")
+    selected_room = st.radio("Select Showroom", ["Old Showroom", "New Showroom"], horizontal=True)
+    
+    if selected_room == "Old Showroom":
+        suppliers = ["Prasiddha", "Max", "SK", "Citizen"]
+        category = "Shoes"
+    else:
+        category = st.selectbox("Category", ["Sports Shoes", "Clothes"])
+        suppliers = ["Leo", "Megha Traders", "New Road"] if category == "Sports Shoes" else ["SM", "Devkota", "Star Denim", "New Road"]
+
+    with st.form("stock_form"):
+        st.subheader(f"Add Entry for {selected_room}")
+        c1, c2, c3 = st.columns(3)
+        f_supp = c1.selectbox("Supplier/Factory", suppliers)
+        f_code = c2.text_input("Item/Jutta Code")
+        f_qty = c3.number_input("Quantity", min_value=1, step=1)
+        
+        if st.form_submit_button("Update Stock (Restock)"):
+            try:
+                new_row = [str(datetime.date.today()), selected_room, category, f_supp, f_code, f_qty]
+                ws_stock.append_row(new_row)
+                st.success(f"Successfully added {f_qty} units of {f_code} to Google Sheet!")
+                st.cache_data.clear()
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error: {e}")
+    st.divider()
+    st.subheader("Current Inventory Status")
+    df_display = df_stock_raw.copy()
+    df_display.insert(0, 'S.N.', range(1, len(df_display) + 1))
+    st.dataframe(df_display, use_container_width=True, hide_index=True)
+elif app_mode == "Attendance":
+    st.title("Staff HR Management")
+    staff_names = ["Pradip Ramtel", "Niru Mishra", "Yogesh Khatri", "Aavash Bogati", "Sahanshila Shrestha", "Prakash Karki"]
+    selected_staff = st.selectbox("Select Staff Name", staff_names)
+    
+    col1, col2 = st.columns(2)
+    today_str = str(datetime.date.today())
+    ws_at = sh.worksheet("Attendance")
+
+    if col1.button("Punch IN"):
+        now = datetime.datetime.now()
+        status = "Late" if now.time() > datetime.time(11, 0) else "On Time"
+        try:
+            ws_at.append_row([today_str, selected_staff, now.strftime("%I:%M %p"), "", status])
+            st.success(f"Check-in Successful: {now.strftime('%I:%M %p')}")
+            st.cache_data.clear()
+        except Exception as e:
+            st.error(f"Error: {e}")
+
+    if col2.button("Punch OUT", use_container_width=True):
+        try:
+            all_records = ws_at.get_all_records()
+            found_row_index = None
+            today = datetime.date.today()न
+            t_dash = today.strftime("%Y-%m-%d")
+            t_slash = f"{today.month}/{today.day}/{today.year}"
+            possible_dates = [t_dash, t_slash]
+            for i, row in enumerate(all_records):
+                clean_row = {str(k).strip(): v for k, v in row.items()}
+                s_staff = str(clean_row.get('Staff Name', '')).strip()
+                s_out = str(clean_row.get('Out time', '')).strip()
+                s_date = str(clean_row.get('Date', '')).strip()
+                if s_staff == selected_staff and (s_out == "" or s_out == "None" or s_out == "nan"):
+                    if s_date in possible_dates or s_date == "":
+                        found_row_index = i + 2
+                        break
+        
+            if found_row_index:
+                now_out = datetime.datetime.now().strftime("%I:%M %p")
+                ws_at.update_cell(found_row_index, 4, now_out) 
+                ws_at.update_cell(found_row_index, 5, "Completed")             
+                st.warning(f"{selected_staff} Out भयो! समय: {now_out}")
+                st.cache_data.clear()
+                st.rerun()
+            else:
+                st.error("डाटा भेटिएन! एकचोटी सिटमा गएर 'In' भएको छ कि छैन हेर त।")
+            
+        except Exception as e:
+            st.error(f"केही गडबड भयो: {e}")
