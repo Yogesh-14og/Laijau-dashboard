@@ -2,155 +2,185 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import gspread
-from google.oauth2.service_account import Credentials
-import datetime
+from oauth2client.service_account import ServiceAccountCredentials
 import time
+import datetime
 
-# --- CONFIG & STYLING ---
-st.set_page_config(page_title="Laijau Dashboard", layout="wide")
+# ---------------- CONFIG ----------------
+st.set_page_config(page_title="Laijau Dashboard v2.0", layout="wide")
+
+# ---------------- GOOGLE SHEETS SETUP ----------------
+@st.cache_resource
+def get_gspread_client():
+    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+    creds = ServiceAccountCredentials.from_json_keyfile_name("credentials.json", scope)
+    return gspread.authorize(creds)
+
+client = get_gspread_client()
+sheet_id = "1NEXA1QP-JGcNO9DYBBSg6PNpr-0IZp10h_E7b2RD7oY"
 
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
-if "share_password" not in st.session_state:
-    st.session_state.share_password = False
 
-# ---------------- LOGIN ----------------
-def login():
-    col1, col2 = st.columns([1.5,1])
-    with col1:
-        st.markdown("# LAIJAU.COM DASHBOARD")
-        st.write("Welcome back! Please login to access the dashboard.")
-    with col2:
-        user = st.text_input("Username")
-        pw = st.text_input("Password", type="password")
-        if st.button("Login", use_container_width=True):
-            if user == "admin" and pw == "123":
-                st.session_state.logged_in = True
-                st.rerun()
-            else:
-                st.error("Invalid credentials")
-
-if not st.session_state.logged_in:
-    login()
-    st.stop()
-
-# ---------------- SHARE ACCESS ----------------
-share_pass = "laijau2026"
-if not st.session_state.share_password:
-    st.title("Share Access Required")
-    share_input = st.text_input("Enter access password", type="password")
-    if st.button("Submit"):
-        if share_input == share_pass:
-            st.session_state.share_password = True
-            st.rerun()
-        else:
-            st.error("Incorrect password")
-    st.stop()
-
-# --- CSS FOR PREMIUM LOOK ---
-st.markdown("""
-    <style>
-    [data-testid="stSidebar"] { background-color: #0E1117; border-right: 1px solid #333; }
-    .stMetric { background-color: #1E1E1E; padding: 15px; border-radius: 10px; border: 1px solid #333; }
-    div.stButton > button { width: 100%; border-radius: 5px; height: 3em; }
-    </style>
-""", unsafe_allow_html=True)
-
-# ---------------- GOOGLE SHEETS CONNECTION ----------------
-try:
-    scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-    creds = Credentials.from_service_account_file("credentials.json", scopes=scope)
-    client = gspread.authorize(creds)
-    sheet_id = "1NEXA1QP-JGcNO9DYBBSg6PNpr-0IZp10h_E7b2RD7oY" 
-    sh = client.open_by_key(sheet_id)
-    
-    # Sales Data Fetch
-    ws_new = sh.worksheet("New Showroom")
-    ws_old = sh.worksheet("Old Showroom")
-    df_new = pd.DataFrame(ws_new.get_all_records())
-    df_old = pd.DataFrame(ws_old.get_all_records())
-    df_sale_raw = pd.concat([df_new, df_old], ignore_index=True)
-    
-    # Data Cleaning for Charts
-    if not df_sale_raw.empty:
-        df_sale_raw['Date'] = pd.to_datetime(df_sale_raw['Date'])
-        df_sale_raw['Month_Name'] = df_sale_raw['Date'].dt.strftime('%b')
-        df_sale_raw['Month_Period'] = df_sale_raw['Date'].dt.to_period('M').astype(str)
-    
-    # Stock Data Fetch
-    ws_stock = sh.worksheet("stock")
-    df_stock_raw = pd.DataFrame(ws_stock.get_all_records())
-    
-except Exception as e:
-    st.error(f"Connection Error: {e}")
-    st.stop()
-
-# --- SIDEBAR NAVIGATION ---
-with st.sidebar:
+def login_ui():
     st.markdown("""
-        <div style='text-align: center; padding: 10px; background-color: #1E1E1E; border-radius: 10px; margin-bottom: 20px; border: 1px solid #00CC96;'>
-            <h1 style='color: #00CC96; margin: 0; font-family: sans-serif;'>LAIJAU</h1>
-            <p style='color: #888; font-size: 12px; margin: 0;'>Business Analytics v2.0</p>
-        </div>
+    <style>
+    [data-testid="stVerticalBlock"] > div:has(div.stFrame) {
+        background-color: blue; 
+        padding: 1rem;
+        border-radius: 15px;
+        border: 1px solid #333;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+    .stTitle {
+        font-size: 3.5rem !important;
+        font-weight: 800 !important;
+        color: #FFFFFF;
+    }
+    </style>
     """, unsafe_allow_html=True)
 
-    app_mode = st.radio("Navigation", ["Sales Dashboard", "Stock Management", "Attendance"])
-    st.divider()
-    
-    if st.button("Logout"):
-        st.session_state.logged_in = False
-        st.session_state.share_password = False
-        st.rerun()
-if app_mode == "Sales Dashboard":
-    st.title("Sales Analytics")
-    st.markdown("### Dashboard Controls")
-    ctrl_col1, ctrl_col2, ctrl_col3 = st.columns(3)
-    
-    with ctrl_col1:
-        Showroom = st.selectbox("Select Showroom", ["Both", "New Showroom", "Old Showroom"])
-    with ctrl_col2:
-        view = st.selectbox("Quick View", ["Full Report", "Daily Trend", "Monthly Growth", "Payment Mode"])
-    with ctrl_col3:
-        min_date = df_sale_raw['Date'].min().date()
-        max_date = df_sale_raw['Date'].max().date()
-        date_range = st.date_input("Filter Date Range", value=(min_date, max_date))
-    df = df_sale_raw.copy()
-    if Showroom != "Both":
-        df = df[df["Showroom"] == Showroom]
-    
-    if len(date_range) == 2:
-        df = df[(df['Date'].dt.date >= date_range[0]) & (df['Date'].dt.date <= date_range[1])]
+    # २. लेआउट (Columns) लाई पनि फङ्सन भित्रै हाल्ने (Indentation मिलाउने)
+    col1, col2 = st.columns([1.5, 1], gap="medium")
 
+    with col1:
+        st.title("LAIJAU.COM")
+        st.subheader("Welcome to the **Ultimate Sales & Inventory** Dashboard")
+        st.info("**Tip:** Always log out after your session to keep the data secure.")
+        st.write("---")
+    with col2:
+        with st.container(border=True):
+            st.header("Admin Login")
+            st.write("Enter credentials to unlock")
+            user = st.text_input("Username", placeholder="e.g. admin", key="login_user")
+            pw = st.text_input("Password", type="password", placeholder="••••••••", key="login_pw")
+            access_code = st.text_input("System Access Code", type="password", placeholder="Enter Access Code", key="login_access")
+            
+            st.markdown("<br>", unsafe_allow_html=True)
+            
+            if st.button("Unlock Dashboard", use_container_width=True):
+                if user == "admin" and pw == "123" and access_code == "9745390311" or "9841514536":
+                    st.session_state.logged_in = True
+                    st.success("Access Granted!")
+                    st.rerun()
+                else:
+                    st.error("Invalid credentials or access code.")
+if not st.session_state.logged_in:
+    login_ui()
+    st.stop()
+
+@st.cache_data(ttl=60)
+def load_all_data():
+    sh = client.open_by_key(sheet_id)
+    try:
+        # 1. Sales Data
+        sales_dfs = []
+        for i in range(2):
+            ws = sh.get_worksheet(i)
+            data = ws.get_all_records()
+            if data:
+                tdf = pd.DataFrame(data)
+                tdf["Showroom"] = "New Showroom" if i == 0 else "Old Showroom"
+                sales_dfs.append(tdf)
+        df_sales = pd.concat(sales_dfs, ignore_index=True) if sales_dfs else pd.DataFrame()
+
+        for col in ["Cash", "Online", "Total"]:
+            if col in df_sales.columns:
+                df_sales[col] = pd.to_numeric(df_sales[col], errors="coerce").fillna(0)
+        
+        df_sales["Date"] = pd.to_datetime(df_sales["Date"].astype(str) + " 2026", errors='coerce')
+        df_sales = df_sales.dropna(subset=["Date"]).sort_values("Date")
+
+        ws_stock = sh.get_worksheet(2)
+        df_stock = pd.DataFrame(ws_stock.get_all_records())
+
+        return df_sales, df_stock
+    except Exception as e:
+        st.error(f"Data Load Error: {e}")
+        return pd.DataFrame(), pd.DataFrame()
+
+df_sales_raw, df_stock_raw = load_all_data()
+
+with st.sidebar:
+    st.markdown("""
+        <div style='text-align: center; padding: 10px; background-color: #1E1E1E; border-radius: 10px; margin-bottom: 20px; border: 1px solid #333;'>
+            <h1 style='color: #00CC96; margin: 0;'>Laijau.com</h1>
+                <h2 style='color: #888; margin: 0;'>Sales & Inventory Dashboard</h2>
+                <p style='color: #888; font-size: 12px; margin: 0;'>Business Analytics v2.0</p>
+            </div>
+        """, unsafe_allow_html=True)
+
+    st.markdown("<h3 class='sidebar-nav' style='color: #F8FAFC;'>Navigation</h3>", unsafe_allow_html=True)
+
+    app_mode = st.radio("Select Module", ["Sales Dashboard", "Stock Management", "Attendance"])
+    
     st.divider()
-    m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Total Revenue", f"Rs {df['Total'].sum():,.0f}")
-    m2.metric("Total Cash", f"Rs {df['Cash'].sum():,.0f}")
-    m3.metric("Total Online", f"Rs {df['Online'].sum():,.0f}")
-    m4.metric("Transactions", len(df))
-    st.divider()
-    if view in ["Full Report", "Daily Trend"]:
+    
+    st.markdown("### System Status")
+    st.success("🟢 System Online")
+    refresh = st.checkbox("Auto-refresh (Live Mode)")
+    
+    if st.button("Logout", use_container_width=True):
+        st.session_state.logged_in = False
+        st.rerun()
+
+        st.markdown("---")
+        st.caption(f"Logged in as: Admin | {datetime.date.today().strftime('%Y-%m-%d')}")  
+
+if app_mode == "Sales Dashboard":
+    st.title("Sales Analysis")
+    
+    with st.expander("Filters", expanded=True):
+        showroom_filter = st.selectbox(
+            "Select Showroom View", 
+            ["Both", "New Showroom", "Old Showroom"],
+            index=0  
+        )
+
+    df_f = df_sales_raw.copy()
+    if showroom_filter != "Both":
+        df_f = df_f[df_f["Showroom"] == showroom_filter]
+
+    if not df_f.empty:
+        # १. TOP METRICS
+        m1, m2, m3 = st.columns(3)
+        best_day_row = df_f.loc[df_f['Total'].idxmax()]
+        best_day_val = best_day_row['Date'].strftime('%b %d')
+        best_day_amt = best_day_row['Total']
+        
+        m1.metric("Total Revenue", f"Rs {df_f['Total'].sum():,.0f}")
+        m2.metric("Best Sales Day", f"{best_day_val}", f"Rs {best_day_amt:,.0f}")
+        m3.metric("Avg Sale/Order", f"Rs {df_f['Total'].mean():,.0f}")
         st.subheader("Daily Sales Trend")
-        daily_sales = df.groupby(df["Date"].dt.date)["Total"].sum().reset_index()
-        fig_daily = px.line(daily_sales, x="Date", y="Total", markers=True, color_discrete_sequence=['#00CC96'])
+        daily_sales = df_f.groupby('Date')['Total'].sum().reset_index()
+        fig_daily = px.area(daily_sales, x="Date", y="Total", 
+                            title="Daily Revenue Fluctuations (2026)",
+                            labels={"Total": "Revenue (Rs)", "Date": "Day"},
+                            template="plotly_dark",
+                            line_shape="spline",
+                            color_discrete_sequence=["#7839D6"]) 
         st.plotly_chart(fig_daily, use_container_width=True)
-    if view in ["Full Report", "Monthly Growth"]:
-       if view == "Full Report" or view == "Monthly Growth":
-            st.subheader("Monthly Growth (%)")
-            monthly_sales = df.groupby(["Month_Period", "Month_Name"])["Total"].sum().reset_index()
-            monthly_sales = monthly_sales.sort_values("Month_Period")
-            monthly_sales["Growth %"] = monthly_sales["Total"].pct_change().fillna(0) * 100
-            fig_growth = px.bar(monthly_sales, x="Month_Name", y="Growth %",
-                        color="Growth %", text_auto=".1f",
-                        color_continuous_scale="RdYlGn",
-                        title="Month-over-Month Growth")
-            st.plotly_chart(fig_growth, use_container_width=True)
-    if view in ["Full Report", "Payment Mode"]:
-        st.subheader("Cash vs Online Breakdown")
-        p_trend = df.groupby(df["Date"].dt.date)[["Cash", "Online"]].sum().reset_index()
-        fig_pay = px.area(p_trend, x="Date", y=["Cash", "Online"])
-        st.plotly_chart(fig_pay, use_container_width=True)
+        st.subheader("Monthly Sales Trend")
+        df_f['Month'] = df_f['Date'].dt.strftime('%B')
+        monthly_sales = df_f.groupby('Month')['Total'].sum().reset_index()
+        month_order = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+        monthly_sales['Month'] = pd.Categorical(monthly_sales['Month'], categories=month_order, ordered=True)
+        monthly_sales = monthly_sales.sort_values('Month')
+        fig_month = px.line(monthly_sales, x="Month", y="Total", markers=True, title="Revenue Growth (2026)", template="plotly_dark")
+        st.plotly_chart(fig_month, use_container_width=True)
+        st.subheader("Payment Mode Analysis")
+        c1, c2 = st.columns([2, 1])
+        with c1:
+            pay_sums = pd.DataFrame({"Method": ["Cash", "Online"], "Amount": [df_f["Cash"].sum(), df_f["Online"].sum()]})
+            fig_pay = px.pie(pay_sums, values="Amount", names="Method", hole=0.5, color_discrete_map={'Cash':'#EF553B', 'Online':'#00CC96'})
+            st.plotly_chart(fig_pay, use_container_width=True)
+        with c2:
+            st.info(f"Online Pay: { (df_f['Online'].sum() / df_f['Total'].sum())*100:.1f}%")
+            st.success(f"Cash Pay: { (df_f['Cash'].sum() / df_f['Total'].sum())*100:.1f}%")
 elif app_mode == "Stock Management":
     st.title("Stock Inventory Control")
+    sh = client.open_by_key(sheet_id)
+    ws_stock = sh.get_worksheet(2)
     selected_room = st.radio("Select Showroom", ["Old Showroom", "New Showroom"], horizontal=True)
     trans_type = st.radio("Action", ["Stock In (+)", "Stock Out (-)"], index=0, horizontal=True)
     if selected_room == "Old Showroom":
@@ -202,32 +232,56 @@ elif app_mode == "Stock Management":
     st.subheader("Current Inventory Status")
     st.dataframe(df_stock_raw, use_container_width=True, hide_index=True)
 
-# ---------------- ATTENDANCE ----------------
-elif app_mode == "Attendance":
-    st.title("Staff Attendance")
+elif app_mode == "Attendance": #for attendance management
+    st.title("Staff HR Management")
     staff_names = ["Pradip Ramtel", "Niru Mishra", "Yogesh Khatri", "Aavash Bogati", "Sahanshila Shrestha", "Prakash Karki"]
-    selected_staff = st.selectbox("Staff Name", staff_names)
-    ws_at = sh.worksheet("Attendance")
+    selected_staff = st.selectbox("Select Staff Name", staff_names)
+    sh = client.open_by_key(sheet_id)
     
-    c1, c2 = st.columns(2)
-    if c1.button("Punch IN", use_container_width=True):
-        now = datetime.datetime.now()
-        status = "Late" if now.time() > datetime.time(11, 0) else "On Time"
-        ws_at.append_row([str(datetime.date.today()), selected_staff, now.strftime("%I:%M %p"), "", status])
-        st.toast(f"Clocked In: {now.strftime('%I:%M %p')}")
-        st.cache_data.clear()
-        st.rerun()
+    col1, col2 = st.columns(2)
+    today_str = str(datetime.date.today())
+    ws_at = sh.worksheet("Attendance")
 
-    if c2.button("Punch OUT", use_container_width=True):
-        all_records = ws_at.get_all_records()
-        for i, row in enumerate(all_records):
-            if str(row.get('Staff Name')) == selected_staff and not str(row.get('Out time')):
-                ws_at.update_cell(i + 2, 4, datetime.datetime.now().strftime("%I:%M %p"))
-                ws_at.update_cell(i + 2, 5, "Completed")
-                st.toast("Clocked Out Successfully!")
+    if col1.button("Punch IN"):
+        now = datetime.datetime.now()
+        status = "Late" if now.time() > datetime.time(11, 0) else "On Time" #yesley late vaye update garne logic ho, 11 baje samma punch in gare on time huncha, 11 baje pachi gare late huncha
+        st.warning(f"Status: {status}") #it means if staff is late or on time, it will show the status after punch in
+        try:
+            ws_at.append_row([today_str, selected_staff, now.strftime("%I:%M %p"), "", status])
+            st.toast(f"Check-in Successful: {now.strftime('%I:%M %p')}")
+            st.warning("Please remember to Punch Out before leaving!")
+            st.cache_data.clear()
+        except Exception as e:
+            st.error(f"Error: {e}")
+
+    if col2.button("Punch OUT", use_container_width=True):
+        try:
+            all_records = ws_at.get_all_records()
+            found_row_index = None
+            today = datetime.date.today()
+            t_dash = today.strftime("%Y-%m-%d") #mailey date format ma dash use gareko chu, google sheets ma date format kasto cha bhanera hernu parcha, tyo anusar format adjust garna parcha
+            t_slash = f"{today.month}/{today.day}/{today.year}" #mailey date format ma slash use gareko chu, google sheets ma date format kasto cha bhanera hernu parcha, tyo anusar format adjust garna parcha
+            possible_dates = [t_dash, t_slash] #kati date format ma google sheets ma date cha bhanera hernu parcha, tyo anusar possible_dates ma format add garna parcha, jasto ki 2026-01-01 or 1/1/2026 etc.
+            for i, row in enumerate(all_records): #yesley google sheets ko attendance worksheet ma punch in gareko staff ko out time update garne logic ho, staff name ra date match bhaye matra update garne, date format google sheets ma kasto cha bhanera hernu parcha, tyo anusar code adjust garna parcha
+                clean_row = {str(k).strip(): v for k, v in row.items()}
+                s_staff = str(clean_row.get('Staff Name', '')).strip() #staff name ko column name google sheets ma kasto cha bhanera hernu parcha, tyo anusar 'Staff Name' adjust garna parcha
+                s_out = str(clean_row.get('Out time', '')).strip() #out time ko column name google sheets ma kasto cha bhanera hernu parcha, tyo anusar 'Out time' adjust garna parcha
+                s_date = str(clean_row.get('Date', '')).strip() #date ko column name google sheets ma kasto cha bhanera hernu parcha, tyo anusar 'Date' adjust garna parcha
+                if s_staff == selected_staff and (s_out == "" or s_out == "None" or s_out == "nan"): #nan vaneko yedi staff ley punch out garya xaina vannu ho 
+                    if s_date in possible_dates or s_date == "":
+                        found_row_index = i + 2
+                        break
+        
+            if found_row_index:
+                now_out = datetime.datetime.now().strftime("%I:%M %p")
+                ws_at.update_cell(found_row_index, 4, now_out) 
+                ws_at.update_cell(found_row_index, 5, "Completed")             
+                st.toast(f"{selected_staff} check out time: {now_out}")
+                time.sleep(2)
                 st.cache_data.clear()
                 st.rerun()
-                breakसिटमा गएर 'In' भएको छ कि छैन हेर त।")
+            else:
+                st.error("Data not found! Please check if the staff has punched in.")
             
         except Exception as e:
-            st.error(f"केही गडबड भयो: {e}")
+            st.error(f"Something went wrong: {e}")
