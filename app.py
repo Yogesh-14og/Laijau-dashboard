@@ -8,12 +8,15 @@ import datetime
 
 # ---------------- CONFIG ----------------
 st.set_page_config(page_title="Laijau Dashboard v2.0", layout="wide")
-
+# सुरुमा यो चेक गर्ने र भ्यालु सेट गर्ने
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
 # ---------------- GOOGLE SHEETS SETUP ----------------
 @st.cache_resource
 def get_gspread_client():
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    creds = ServiceAccountCredentials.from_json_keyfile_name("credentials.json", scope)
+    creds_info = st.secrets["google_sheets"]
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_info, scope)
     return gspread.authorize(creds)
 
 client = get_gspread_client()
@@ -59,25 +62,32 @@ def login_ui():
                     st.warning("कृपया सबै विवरणहरू भर्नुहोस्!")
                 else:
                     try:
+                        # १. सेक्रेट्सबाट डेटा तान्ने
                         s_user = str(st.secrets["passwords"]["admin_user"])
                         s_pw = str(st.secrets["passwords"]["admin_password"])
+                        # सबै कोडहरूलाई String मा कन्भर्ट गर्ने ताकि म्याच होस्
                         s_codes = [str(c) for c in st.secrets["employee_codes"]["codes"]]
+                        
+                        # २. म्याच गर्ने (दुवै तर्फ String बनाएर)
                         u_match = (user == s_user)
                         p_match = (pw == s_pw)
                         a_match = (str(access_code) in s_codes)
+
                         if u_match and p_match and a_match:
                             st.session_state.logged_in = True
                             st.success("Access Granted! Loading...")
                             time.sleep(1)
                             st.rerun()
                         else:
+                            # यो सेक्सनले तिमीलाई कहाँ गल्ती भयो भन्ने 'Hint' दिन्छ
                             st.error("Invalid Credentials!")
-                            if not u_match: st.toast("Check Username ")
-                            if not p_match: st.toast("Check Password ")
-                            if not a_match: st.toast("Check Access Code ")
+                            if not u_match: st.toast("Check Username ❌")
+                            if not p_match: st.toast("Check Password ❌")
+                            if not a_match: st.toast("Check Access Code ❌")
                             
                     except Exception as e:
                         st.error(f"Configuration Error: {e}")
+                        st.info("Tip: Make sure .streamlit/secrets.toml is saved and formatted correctly.")
 if not st.session_state.logged_in:
     login_ui()
     st.stop()
