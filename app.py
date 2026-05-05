@@ -218,28 +218,20 @@ elif app_mode == "Stock Management":
     st.dataframe(df_stock_raw, use_container_width=True, hide_index=True)
 elif app_mode == "Attendance": # for attendance management
     st.title("Staff HR Management")
-    
-    # नेपालको टाइमजोन सेट गर्ने
     nepal_tz = pytz.timezone('Asia/Kathmandu')
-    now_nepal = datetime.datetime.now(nepal_tz)
+    now_nepal = datetime.now(nepal_tz)
     today_nepal = now_nepal.date()
     today_str = today_nepal.strftime("%Y-%m-%d")
-
     staff_names = ["Pradip Ramtel", "Niru Mishra", "Yogesh Khatri", "Aavash Bogati", "Sahanshila Shrestha", "Prakash Karki"]
-    selected_staff = st.selectbox("Select Staff Name", staff_names)
-    
+    selected_staff = st.selectbox("Select Staff Name", staff_names) 
     sh = client.open_by_key(sheet_id)
     ws_at = sh.worksheet("Attendance")
     col1, col2 = st.columns(2)
-
     if col1.button("Punch IN"):
-        # ११ बजेको डेडलाइन चेक गर्ने (नेपालको समय अनुसार)
         deadline = datetime.time(11, 0)
-        status = "Late" if now_nepal.time() > deadline else "On Time"
-        
+        status = "Late" if now_nepal.time() > deadline else "On Time"        
         st.warning(f"Status: {status}")
         try:
-            # नेपालको समयलाई AM/PM फर्म्याटमा ढाल्ने
             punch_in_time = now_nepal.strftime("%I:%M %p")
             ws_at.append_row([today_str, selected_staff, punch_in_time, "", status])
             st.toast(f"Check-in Successful: {punch_in_time}")
@@ -247,7 +239,6 @@ elif app_mode == "Attendance": # for attendance management
             st.cache_data.clear()
         except Exception as e:
             st.error(f"Error: {e}")
-
     if col2.button("Punch OUT", use_container_width=True):
         try:
             all_records = ws_at.get_all_records()
