@@ -4,7 +4,8 @@ import plotly.express as px
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import time
-import datetime
+from datetime import datetime
+import pytz
 st.set_page_config(page_title="Laijau Dashboard v2.0", layout="wide")
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
@@ -215,50 +216,67 @@ elif app_mode == "Stock Management":
     st.divider()
     st.subheader("Current Inventory Status")
     st.dataframe(df_stock_raw, use_container_width=True, hide_index=True)
-elif app_mode == "Attendance": #for attendance management
+elif app_mode == "Attendance": # for attendance management
     st.title("Staff HR Management")
+    
+    # नेपालको टाइमजोन सेट गर्ने
+    nepal_tz = pytz.timezone('Asia/Kathmandu')
+    now_nepal = datetime.datetime.now(nepal_tz)
+    today_nepal = now_nepal.date()
+    today_str = today_nepal.strftime("%Y-%m-%d")
+
     staff_names = ["Pradip Ramtel", "Niru Mishra", "Yogesh Khatri", "Aavash Bogati", "Sahanshila Shrestha", "Prakash Karki"]
     selected_staff = st.selectbox("Select Staff Name", staff_names)
+    
     sh = client.open_by_key(sheet_id)
-    col1, col2 = st.columns(2)
-    today_str = str(datetime.date.today())
     ws_at = sh.worksheet("Attendance")
+    col1, col2 = st.columns(2)
+
     if col1.button("Punch IN"):
-        now = datetime.datetime.now()
-        status = "Late" if now.time() > datetime.time(11, 0) else "On Time" #yesley late vaye update garne logic ho, 11 baje samma punch in gare on time huncha, 11 baje pachi gare late huncha
-        st.warning(f"Status: {status}") #it means if staff is late or on time, it will show the status after punch in
+        # ११ बजेको डेडलाइन चेक गर्ने (नेपालको समय अनुसार)
+        deadline = datetime.time(11, 0)
+        status = "Late" if now_nepal.time() > deadline else "On Time"
+        
+        st.warning(f"Status: {status}")
         try:
-            ws_at.append_row([today_str, selected_staff, now.strftime("%I:%M %p"), "", status])
-            st.toast(f"Check-in Successful: {now.strftime('%I:%M %p')}")
+            # नेपालको समयलाई AM/PM फर्म्याटमा ढाल्ने
+            punch_in_time = now_nepal.strftime("%I:%M %p")
+            ws_at.append_row([today_str, selected_staff, punch_in_time, "", status])
+            st.toast(f"Check-in Successful: {punch_in_time}")
             st.warning("Please remember to Punch Out before leaving!")
             st.cache_data.clear()
         except Exception as e:
             st.error(f"Error: {e}")
+
     if col2.button("Punch OUT", use_container_width=True):
         try:
             all_records = ws_at.get_all_records()
             found_row_index = None
-            today = datetime.date.today()
-            t_dash = today.strftime("%Y-%m-%d") #mailey date format ma dash use gareko chu, google sheets ma date format kasto cha bhanera hernu parcha, tyo anusar format adjust garna parcha
-            t_slash = f"{today.month}/{today.day}/{today.year}" #mailey date format ma slash use gareko chu, google sheets ma date format kasto cha bhanera hernu parcha, tyo anusar format adjust garna parcha
-            possible_dates = [t_dash, t_slash] #kati date format ma google sheets ma date cha bhanera hernu parcha, tyo anusar possible_dates ma format add garna parcha, jasto ki 2026-01-01 or 1/1/2026 etc.
-            for i, row in enumerate(all_records): #yesley google sheets ko attendance worksheet ma punch in gareko staff ko out time update garne logic ho, staff name ra date match bhaye matra update garne, date format google sheets ma kasto cha bhanera hernu parcha, tyo anusar code adjust garna parcha
+            t_dash = today_nepal.strftime("%Y-%m-%d")
+            t_slash = f"{today_nepal.month}/{today_nepal.day}/{today_nepal.year}"
+            possible_dates = [t_dash, t_slash]
+
+            for i, row in enumerate(all_records):
                 clean_row = {str(k).strip(): v for k, v in row.items()}
-                s_staff = str(clean_row.get('Staff Name', '')).strip() #staff name ko column name google sheets ma kasto cha bhanera hernu parcha, tyo anusar 'Staff Name' adjust garna parcha
-                s_out = str(clean_row.get('Out time', '')).strip() #out time ko column name google sheets ma kasto cha bhanera hernu parcha, tyo anusar 'Out time' adjust garna parcha
-                s_date = str(clean_row.get('Date', '')).strip() #date ko column name google sheets ma kasto cha bhanera hernu parcha, tyo anusar 'Date' adjust garna parcha
-                if s_staff == selected_staff and (s_out == "" or s_out == "None" or s_out == "nan"): #nan vaneko yedi staff ley punch out garya xaina vannu ho 
+                s_staff = str(clean_row.get('Staff Name', '')).strip()
+                s_out = str(clean_row.get('Out time', '')).strip()
+                s_date = str(clean_row.get('Date', '')).strip()
+                if s_staff == selected_staff and (s_out == "" or s_out == "None" or s_out == "nan"):
                     if s_date in possible_dates or s_date == "":
                         found_row_index = i + 2
-                        break        
+                        break         
             if found_row_index:
-                now_out = datetime.datetime.now().strftime("%I:%M %p")
+                now_out = now_nepal.strftime("%I:%M %p")
                 ws_at.update_cell(found_row_index, 4, now_out) 
-                ws_at.update_cell(found_row_index, 5, "Completed")             
+                ws_at.update_cell(found_row_index, 5, "Completed")              
                 st.toast(f"{selected_staff} check out time: {now_out}")
                 time.sleep(2)
                 st.cache_data.clear()
                 st.rerun()
+            else:
+                st.error("Punch In record not found for today!")
+        except Exception as e:
+            st.error(f"Error during Punch Out: {e}")
             else:
                 st.error("Data not found! Please check if the staff has punched in.")            
         except Exception as e:
