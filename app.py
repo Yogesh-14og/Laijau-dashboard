@@ -18,10 +18,6 @@ def get_gspread_client():
 
 client = get_gspread_client()
 sheet_id = "1NEXA1QP-JGcNO9DYBBSg6PNpr-0IZp10h_E7b2RD7oY"
-
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
-
 def login_ui():
     st.markdown("""
     <style>
@@ -59,12 +55,29 @@ def login_ui():
             st.markdown("<br>", unsafe_allow_html=True)
             
             if st.button("Unlock Dashboard", use_container_width=True):
-                if user == "admin" and pw == "123" and access_code == "9745390311" or "9841514536":
-                    st.session_state.logged_in = True
-                    st.success("Access Granted!")
-                    st.rerun()
+                if not user or not pw or not access_code:
+                    st.warning("कृपया सबै विवरणहरू भर्नुहोस्!")
                 else:
-                    st.error("Invalid credentials or access code.")
+                    try:
+                        s_user = str(st.secrets["passwords"]["admin_user"])
+                        s_pw = str(st.secrets["passwords"]["admin_password"])
+                        s_codes = [str(c) for c in st.secrets["employee_codes"]["codes"]]
+                        u_match = (user == s_user)
+                        p_match = (pw == s_pw)
+                        a_match = (str(access_code) in s_codes)
+                        if u_match and p_match and a_match:
+                            st.session_state.logged_in = True
+                            st.success("Access Granted! Loading...")
+                            time.sleep(1)
+                            st.rerun()
+                        else:
+                            st.error("Invalid Credentials!")
+                            if not u_match: st.toast("Check Username ")
+                            if not p_match: st.toast("Check Password ")
+                            if not a_match: st.toast("Check Access Code ")
+                            
+                    except Exception as e:
+                        st.error(f"Configuration Error: {e}")
 if not st.session_state.logged_in:
     login_ui()
     st.stop()
