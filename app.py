@@ -204,7 +204,10 @@ elif app_mode == "Stock Management":
                             ws_stock.update_cell(found_row_index, 6, new_total)
                             st.success(f"Updated: {f_code} total is now {new_total}")
                     elif trans_type == "Stock In (+)":
-                        ws_stock.append_row([str(datetime.date.today()), selected_room, category, f_supp, f_code, f_qty])
+                        # यो लाइन 'Punch IN' मा जस्तै यहाँ पनि प्रयोग गर्न सकिन्छ
+                        nepal_tz = pytz.timezone('Asia/Kathmandu')
+                        today_nepal = datetime.now(nepal_tz).strftime("%Y-%m-%d")
+                        ws_stock.append_row([today_nepal, selected_room, category, f_supp, f_code, f_qty])
                         st.success(f"New Item {f_code} added!")
                     else:
                         st.error("Item not found for Stock Out.")                  
