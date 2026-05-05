@@ -4,7 +4,7 @@ import plotly.express as px
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import time
-from datetime import datetime
+from datetime import datetime,time
 import pytz
 st.set_page_config(page_title="Laijau Dashboard v2.0", layout="wide")
 if "logged_in" not in st.session_state:
@@ -228,7 +228,7 @@ elif app_mode == "Attendance": # for attendance management
     ws_at = sh.worksheet("Attendance")
     col1, col2 = st.columns(2)
     if col1.button("Punch IN"):
-        deadline = datetime.time(11, 0)
+        deadline = time(11, 0)
         status = "Late" if now_nepal.time() > deadline else "On Time"        
         st.warning(f"Status: {status}")
         try:
