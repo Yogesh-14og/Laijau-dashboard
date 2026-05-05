@@ -5,20 +5,15 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import time
 import datetime
-
-# ---------------- CONFIG ----------------
 st.set_page_config(page_title="Laijau Dashboard v2.0", layout="wide")
-# सुरुमा यो चेक गर्ने र भ्यालु सेट गर्ने
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
-# ---------------- GOOGLE SHEETS SETUP ----------------
 @st.cache_resource
 def get_gspread_client():
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
     creds_info = st.secrets["google_sheets"]
     creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_info, scope)
     return gspread.authorize(creds)
-
 client = get_gspread_client()
 sheet_id = "1NEXA1QP-JGcNO9DYBBSg6PNpr-0IZp10h_E7b2RD7oY"
 def login_ui():
@@ -38,10 +33,7 @@ def login_ui():
     }
     </style>
     """, unsafe_allow_html=True)
-
-    # २. लेआउट (Columns) लाई पनि फङ्सन भित्रै हाल्ने (Indentation मिलाउने)
     col1, col2 = st.columns([1.5, 1], gap="medium")
-
     with col1:
         st.title("LAIJAU.COM")
         st.subheader("Welcome to the **Ultimate Sales & Inventory** Dashboard")
@@ -54,49 +46,38 @@ def login_ui():
             user = st.text_input("Username", placeholder="e.g. admin", key="login_user")
             pw = st.text_input("Password", type="password", placeholder="••••••••", key="login_pw")
             access_code = st.text_input("System Access Code", type="password", placeholder="Enter Access Code", key="login_access")
-            
             st.markdown("<br>", unsafe_allow_html=True)
-            
             if st.button("Unlock Dashboard", use_container_width=True):
                 if not user or not pw or not access_code:
                     st.warning("कृपया सबै विवरणहरू भर्नुहोस्!")
                 else:
                     try:
-                        # १. सेक्रेट्सबाट डेटा तान्ने
                         s_user = str(st.secrets["passwords"]["admin_user"])
                         s_pw = str(st.secrets["passwords"]["admin_password"])
-                        # सबै कोडहरूलाई String मा कन्भर्ट गर्ने ताकि म्याच होस्
                         s_codes = [str(c) for c in st.secrets["employee_codes"]["codes"]]
-                        
-                        # २. म्याच गर्ने (दुवै तर्फ String बनाएर)
                         u_match = (user == s_user)
                         p_match = (pw == s_pw)
                         a_match = (str(access_code) in s_codes)
-
                         if u_match and p_match and a_match:
                             st.session_state.logged_in = True
                             st.success("Access Granted! Loading...")
                             time.sleep(1)
                             st.rerun()
                         else:
-                            # यो सेक्सनले तिमीलाई कहाँ गल्ती भयो भन्ने 'Hint' दिन्छ
                             st.error("Invalid Credentials!")
-                            if not u_match: st.toast("Check Username ❌")
-                            if not p_match: st.toast("Check Password ❌")
-                            if not a_match: st.toast("Check Access Code ❌")
-                            
+                            if not u_match: st.toast("Check Username ")
+                            if not p_match: st.toast("Check Password ")
+                            if not a_match: st.toast("Check Access Code ")         
                     except Exception as e:
                         st.error(f"Configuration Error: {e}")
                         st.info("Tip: Make sure .streamlit/secrets.toml is saved and formatted correctly.")
 if not st.session_state.logged_in:
     login_ui()
     st.stop()
-
 @st.cache_data(ttl=60)
 def load_all_data():
     sh = client.open_by_key(sheet_id)
     try:
-        # 1. Sales Data
         sales_dfs = []
         for i in range(2):
             ws = sh.get_worksheet(i)
@@ -106,24 +87,18 @@ def load_all_data():
                 tdf["Showroom"] = "New Showroom" if i == 0 else "Old Showroom"
                 sales_dfs.append(tdf)
         df_sales = pd.concat(sales_dfs, ignore_index=True) if sales_dfs else pd.DataFrame()
-
         for col in ["Cash", "Online", "Total"]:
             if col in df_sales.columns:
                 df_sales[col] = pd.to_numeric(df_sales[col], errors="coerce").fillna(0)
-        
         df_sales["Date"] = pd.to_datetime(df_sales["Date"].astype(str) + " 2026", errors='coerce')
         df_sales = df_sales.dropna(subset=["Date"]).sort_values("Date")
-
         ws_stock = sh.get_worksheet(2)
         df_stock = pd.DataFrame(ws_stock.get_all_records())
-
         return df_sales, df_stock
     except Exception as e:
         st.error(f"Data Load Error: {e}")
         return pd.DataFrame(), pd.DataFrame()
-
 df_sales_raw, df_stock_raw = load_all_data()
-
 with st.sidebar:
     st.markdown("""
         <div style='text-align: center; padding: 10px; background-color: #1E1E1E; border-radius: 10px; margin-bottom: 20px; border: 1px solid #333;'>
@@ -132,45 +107,33 @@ with st.sidebar:
                 <p style='color: #888; font-size: 12px; margin: 0;'>Business Analytics v2.0</p>
             </div>
         """, unsafe_allow_html=True)
-
     st.markdown("<h3 class='sidebar-nav' style='color: #F8FAFC;'>Navigation</h3>", unsafe_allow_html=True)
-
     app_mode = st.radio("Select Module", ["Sales Dashboard", "Stock Management", "Attendance"])
-    
     st.divider()
-    
     st.markdown("### System Status")
     st.success("🟢 System Online")
     refresh = st.checkbox("Auto-refresh (Live Mode)")
-    
     if st.button("Logout", use_container_width=True):
         st.session_state.logged_in = False
         st.rerun()
-
         st.markdown("---")
         st.caption(f"Logged in as: Admin | {datetime.date.today().strftime('%Y-%m-%d')}")  
-
 if app_mode == "Sales Dashboard":
-    st.title("Sales Analysis")
-    
+    st.title("Sales Analysis")    
     with st.expander("Filters", expanded=True):
         showroom_filter = st.selectbox(
             "Select Showroom View", 
             ["Both", "New Showroom", "Old Showroom"],
             index=0  
         )
-
     df_f = df_sales_raw.copy()
     if showroom_filter != "Both":
         df_f = df_f[df_f["Showroom"] == showroom_filter]
-
     if not df_f.empty:
-        # १. TOP METRICS
         m1, m2, m3 = st.columns(3)
         best_day_row = df_f.loc[df_f['Total'].idxmax()]
         best_day_val = best_day_row['Date'].strftime('%b %d')
-        best_day_amt = best_day_row['Total']
-        
+        best_day_amt = best_day_row['Total']        
         m1.metric("Total Revenue", f"Rs {df_f['Total'].sum():,.0f}")
         m2.metric("Best Sales Day", f"{best_day_val}", f"Rs {best_day_amt:,.0f}")
         m3.metric("Avg Sale/Order", f"Rs {df_f['Total'].mean():,.0f}")
@@ -243,28 +206,23 @@ elif app_mode == "Stock Management":
                         ws_stock.append_row([str(datetime.date.today()), selected_room, category, f_supp, f_code, f_qty])
                         st.success(f"New Item {f_code} added!")
                     else:
-                        st.error("Item not found for Stock Out.")
-                    
+                        st.error("Item not found for Stock Out.")                  
                     st.cache_data.clear()
                     time.sleep(1)
                     st.rerun()
                 except Exception as e:
                     st.error(f"Error: {e}")
-
     st.divider()
     st.subheader("Current Inventory Status")
     st.dataframe(df_stock_raw, use_container_width=True, hide_index=True)
-
 elif app_mode == "Attendance": #for attendance management
     st.title("Staff HR Management")
     staff_names = ["Pradip Ramtel", "Niru Mishra", "Yogesh Khatri", "Aavash Bogati", "Sahanshila Shrestha", "Prakash Karki"]
     selected_staff = st.selectbox("Select Staff Name", staff_names)
     sh = client.open_by_key(sheet_id)
-    
     col1, col2 = st.columns(2)
     today_str = str(datetime.date.today())
     ws_at = sh.worksheet("Attendance")
-
     if col1.button("Punch IN"):
         now = datetime.datetime.now()
         status = "Late" if now.time() > datetime.time(11, 0) else "On Time" #yesley late vaye update garne logic ho, 11 baje samma punch in gare on time huncha, 11 baje pachi gare late huncha
@@ -276,7 +234,6 @@ elif app_mode == "Attendance": #for attendance management
             st.cache_data.clear()
         except Exception as e:
             st.error(f"Error: {e}")
-
     if col2.button("Punch OUT", use_container_width=True):
         try:
             all_records = ws_at.get_all_records()
@@ -293,8 +250,7 @@ elif app_mode == "Attendance": #for attendance management
                 if s_staff == selected_staff and (s_out == "" or s_out == "None" or s_out == "nan"): #nan vaneko yedi staff ley punch out garya xaina vannu ho 
                     if s_date in possible_dates or s_date == "":
                         found_row_index = i + 2
-                        break
-        
+                        break        
             if found_row_index:
                 now_out = datetime.datetime.now().strftime("%I:%M %p")
                 ws_at.update_cell(found_row_index, 4, now_out) 
@@ -304,7 +260,6 @@ elif app_mode == "Attendance": #for attendance management
                 st.cache_data.clear()
                 st.rerun()
             else:
-                st.error("Data not found! Please check if the staff has punched in.")
-            
+                st.error("Data not found! Please check if the staff has punched in.")            
         except Exception as e:
             st.error(f"Something went wrong: {e}")
