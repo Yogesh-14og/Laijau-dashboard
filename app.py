@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.express as px
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-import time
+import time as t
 from datetime import datetime,time
 import pytz
 st.set_page_config(page_title="Laijau Dashboard v2.0", layout="wide")
@@ -261,7 +261,7 @@ elif app_mode == "Attendance": # for attendance management
                 ws_at.update_cell(found_row_index, 4, now_out) 
                 ws_at.update_cell(found_row_index, 5, "Completed")              
                 st.toast(f"{selected_staff} check out time: {now_out}")
-                time.sleep(2)
+                t.sleep(2)
                 st.cache_data.clear()
                 st.rerun()
             else:
