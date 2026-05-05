@@ -50,7 +50,7 @@ def login_ui():
             st.markdown("<br>", unsafe_allow_html=True)
             if st.button("Unlock Dashboard", use_container_width=True):
                 if not user or not pw or not access_code:
-                    st.warning("कृपया सबै विवरणहरू भर्नुहोस्!")
+                    st.warning("Please fill all the fields!")
                 else:
                     try:
                         s_user = str(st.secrets["passwords"]["admin_user"])
@@ -62,7 +62,7 @@ def login_ui():
                         if u_match and p_match and a_match:
                             st.session_state.logged_in = True
                             st.success("Access Granted! Loading...")
-                            time.sleep(1)
+                            t.sleep(1)
                             st.rerun()
                         else:
                             st.error("Invalid Credentials!")
