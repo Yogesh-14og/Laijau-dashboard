@@ -277,7 +277,3 @@ elif app_mode == "Attendance": # for attendance management
                 st.error("Punch In record not found for today!")
         except Exception as e:
             st.error(f"Error during Punch Out: {e}")
-            else:
-                st.error("Data not found! Please check if the staff has punched in.")            
-        except Exception as e:
-            st.error(f"Something went wrong: {e}")
