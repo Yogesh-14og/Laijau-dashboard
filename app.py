@@ -16,7 +16,7 @@ def get_gspread_client():
     creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_info, scope)
     return gspread.authorize(creds)
 client = get_gspread_client()
-sheet_id = "1NEXA1QP-JGcNO9DYBBSg6PNpr-0IZp10h_E7b2RD7oY"
+sheet_id = st.secrets["spreadsheet_id"]
 def login_ui():
     st.markdown("""
     <style>
