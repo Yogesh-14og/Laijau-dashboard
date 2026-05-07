@@ -77,6 +77,9 @@ if not st.session_state.logged_in:
     st.stop()
 @st.cache_data(ttl=60)
 def load_all_data():
+    if not sheet_id:
+            st.error("Spreadsheet ID फेला परेन। कृपया Secrets चेक गर्नुहोला।")
+            return pd.DataFrame(), pd.DataFrame()
     sh = client.open_by_key(sheet_id)
     try:
         sales_dfs = []
