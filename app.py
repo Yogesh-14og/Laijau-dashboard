@@ -234,10 +234,10 @@ elif app_mode == "Attendance": # for attendance management
     try:
         ws_at = sh.worksheet(selected_staff)
     except:
-        st.error(f"Error: '{selected_staff}' को ट्याब भेटिएन। सिटमा ट्याब बनाउनुहोस्।")
+        st.error(f"Error: '{selected_staff}''s tab is not founded.")
         st.stop()
     col1, col2 = st.columns(2)    
-    if col1.button("Punch IN", use_container_width=True):
+    if col1.button("Punch In", use_container_width=True):
         deadline = time(11, 0)
         status = "Late" if now_nepal.time() > deadline else "On Time"                
         try:
@@ -248,7 +248,7 @@ elif app_mode == "Attendance": # for attendance management
             st.cache_data.clear()
         except Exception as e:
             st.error(f"Error: {e}")
-    if col2.button("Punch OUT", use_container_width=True):
+    if col2.button("Punch Out", use_container_width=True):
         try:
             all_records = ws_at.get_all_records()
             found_row_index = None            
