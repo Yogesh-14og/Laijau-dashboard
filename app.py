@@ -223,14 +223,14 @@ elif app_mode == "Stock Management":
     st.dataframe(df_stock_raw, use_container_width=True, hide_index=True)
 elif app_mode == "Attendance": # for attendance management
     st.title("Staff HR Management")
+    sh = client.open_by_key(sheet_id)
+    ws_at = sh.worksheet("Employees")
+    employee_data = ws_emp.col_values(1)[1:]
     nepal_tz = pytz.timezone('Asia/Kathmandu')
     now_nepal = datetime.now(nepal_tz)
     today_nepal = now_nepal.date()
     today_str = today_nepal.strftime("%Y-%m-%d")
-    staff_names = ["Pradip Ramtel", "Niru Mishra", "Yogesh Khatri", "Aavash Bogati", "Sahanshila Shrestha", "Prakash Karki"]
-    selected_staff = st.selectbox("Select Staff Name", staff_names) 
-    sh = client.open_by_key(sheet_id)
-    ws_at = sh.worksheet("Attendance")
+    selected_staff = st.selectbox("Select Staff Name", employee_data)     
     col1, col2 = st.columns(2)
     if col1.button("Punch IN"):
         deadline = time(11, 0)
