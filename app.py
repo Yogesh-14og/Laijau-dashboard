@@ -262,7 +262,7 @@ elif app_mode == "Attendance": # for attendance management
                 ws_at.update_cell(found_row_index, 3, now_out) 
                 ws_at.update_cell(found_row_index, 4, "Completed")              
                 st.toast(f"{selected_staff} Check-out: {now_out}")
-                time.sleep(2)
+                t.sleep(2)
                 st.cache_data.clear()
                 st.rerun()
             else:
