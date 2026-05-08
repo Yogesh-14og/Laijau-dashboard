@@ -224,52 +224,48 @@ elif app_mode == "Stock Management":
 elif app_mode == "Attendance": # for attendance management
     st.title("Staff HR Management")
     sh = client.open_by_key(sheet_id)
-    ws_at = sh.worksheet("Employees")
-    employee_data = ws_at.col_values(2)[1:]
+    ws_emp = sh.worksheet("Employees")
+    employee_data = ws_emp.col_values(2)[1:]     
     nepal_tz = pytz.timezone('Asia/Kathmandu')
     now_nepal = datetime.now(nepal_tz)
     today_nepal = now_nepal.date()
     today_str = today_nepal.strftime("%Y-%m-%d")
-    selected_staff = st.selectbox("Select Staff Name", employee_data)     
-    col1, col2 = st.columns(2)
-    if col1.button("Punch IN"):
+    selected_staff = st.selectbox("Select Staff Name", employee_data)         
+    try:
+        ws_at = sh.worksheet(selected_staff)
+    except:
+        st.error(f"Error: '{selected_staff}' को ट्याब भेटिएन। सिटमा ट्याब बनाउनुहोस्।")
+        st.stop()
+    col1, col2 = st.columns(2)    
+    if col1.button("Punch IN", use_container_width=True):
         deadline = time(11, 0)
-        status = "Late" if now_nepal.time() > deadline else "On Time"        
-        st.warning(f"Status: {status}")
+        status = "Late" if now_nepal.time() > deadline else "On Time"                
         try:
             punch_in_time = now_nepal.strftime("%I:%M %p")
-            ws_at.append_row([today_str, selected_staff, punch_in_time, "", status])
-            st.toast(f"Check-in Successful: {punch_in_time}")
-            st.warning("Please remember to Punch Out before leaving!")
+            ws_at.append_row([today_str, punch_in_time, "", status])
+            st.toast(f"Check-in Successful for {selected_staff}")
+            st.warning(f"Status: {status} | In: {punch_in_time}")
             st.cache_data.clear()
         except Exception as e:
             st.error(f"Error: {e}")
     if col2.button("Punch OUT", use_container_width=True):
         try:
             all_records = ws_at.get_all_records()
-            found_row_index = None
-            t_dash = today_nepal.strftime("%Y-%m-%d")
-            t_slash = f"{today_nepal.month}/{today_nepal.day}/{today_nepal.year}"
-            possible_dates = [t_dash, t_slash]
-
-            for i, row in enumerate(all_records):
-                clean_row = {str(k).strip(): v for k, v in row.items()}
-                s_staff = str(clean_row.get('Staff Name', '')).strip()
-                s_out = str(clean_row.get('Out time', '')).strip()
-                s_date = str(clean_row.get('Date', '')).strip()
-                if s_staff == selected_staff and (s_out == "" or s_out == "None" or s_out == "nan"):
-                    if s_date in possible_dates or s_date == "":
-                        found_row_index = i + 2
-                        break         
+            found_row_index = None            
+            for i, row in enumerate(reversed(all_records)):
+                actual_idx = len(all_records) - i + 1                
+                if str(row.get('Out Time', '')).strip() in ["", "None", "nan"]:
+                    found_row_index = actual_idx
+                    break         
             if found_row_index:
                 now_out = now_nepal.strftime("%I:%M %p")
-                ws_at.update_cell(found_row_index, 4, now_out) 
-                ws_at.update_cell(found_row_index, 5, "Completed")              
-                st.toast(f"{selected_staff} check out time: {now_out}")
-                t.sleep(2)
+                ws_at.update_cell(found_row_index, 3, now_out) 
+                ws_at.update_cell(found_row_index, 4, "Completed")              
+                st.toast(f"{selected_staff} Check-out: {now_out}")
+                time.sleep(2)
                 st.cache_data.clear()
                 st.rerun()
             else:
-                st.error("Punch In record not found for today!")
+                st.error("Punch-In record is not founded")
         except Exception as e:
             st.error(f"Error during Punch Out: {e}")
