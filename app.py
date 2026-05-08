@@ -225,7 +225,7 @@ elif app_mode == "Attendance": # for attendance management
     st.title("Staff HR Management")
     sh = client.open_by_key(sheet_id)
     ws_at = sh.worksheet("Employees")
-    employee_data = ws_at.col_values(1)[1:]
+    employee_data = ws_at.col_values(2)[1:]
     nepal_tz = pytz.timezone('Asia/Kathmandu')
     now_nepal = datetime.now(nepal_tz)
     today_nepal = now_nepal.date()
