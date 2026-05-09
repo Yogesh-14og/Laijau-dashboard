@@ -179,31 +179,34 @@ elif app_mode == "Stock Management":
     ws_supp = sh.worksheet("Suppliers")
     supp_data = ws_supp.get_all_records()
     supp_df = pd.DataFrame(supp_data)
-    col_name = "Supplier Name" if "Supplier Name" in supp_df.columns else supp_df.columns[1] 
     selected_room = st.radio("Select Showroom", ["Old Showroom", "New Showroom"], 
                              index=0 if st.session_state.selected_room == "Old Showroom" else 1,
                              horizontal=True)
     st.session_state.selected_room = selected_room
+    if selected_room == "New Showroom":
+        chosen_cat = st.selectbox("Product Category", ["Clothes", "Shoes", "Accessories"])
+    else:
+        chosen_cat = "Shoes"
 
     trans_type = st.radio("Action", ["Stock In (+)", "Stock Out (-)"], index=0, horizontal=True)
     with st.form("stock_form", clear_on_submit=True):
-        st.subheader(f"Inventory Entry: {selected_room}")
-        c1, c2, c3 = st.columns(3)  
+        st.subheader(f"Entry: {selected_room} | {chosen_cat}")
+        c1, c2, c3 = st.columns(3)    
         f_code = c2.text_input("Scan Barcode / Item Code").strip().upper()        
         detected_supp = None
         if f_code:
             prefix = f_code[:2]
             match = supp_df[supp_df['Prefix'] == prefix]
             if not match.empty:
-                detected_supp = match.iloc[0][col_name]
-        
-        all_suppliers = supp_df[col_name].tolist()
-        default_idx = all_suppliers.index(detected_supp) if detected_supp in all_suppliers else 0
-        f_supp = c1.selectbox("Supplier/Factory", all_suppliers, index=default_idx)
+                detected_supp = match.iloc[0]['Supplier']
+        display_suppliers = supp_df[supp_df['Category'] == chosen_cat]['Supplier'].tolist()
+        if not display_suppliers:
+            display_suppliers = supp_df['Supplier'].tolist()
+
+        default_idx = display_suppliers.index(detected_supp) if detected_supp in display_suppliers else 0
+        f_supp = c1.selectbox("Supplier/Factory", display_suppliers, index=default_idx)
         f_qty = c3.number_input("Quantity", min_value=1, step=1)
         submitted = st.form_submit_button("Submit Transaction")
-
-    # --- FORM को काम (बटन थिचेपछि मात्र) ---
     if submitted:
         if not f_code:
             st.warning("Item code empty!")
@@ -212,7 +215,6 @@ elif app_mode == "Stock Management":
                 all_rows = ws_stock.get_all_values()
                 found_row_index = None
                 current_qty = 0
-                
                 for i, row in enumerate(all_rows[1:]):
                     if str(row[1]).strip().upper() == selected_room.strip().upper() and \
                        str(row[4]).strip().upper() == f_code:
@@ -223,32 +225,31 @@ elif app_mode == "Stock Management":
                 if found_row_index:
                     new_total = current_qty + f_qty if trans_type == "Stock In (+)" else current_qty - f_qty
                     if new_total < 0:
-                        st.error(f"Insufficient Stock in {selected_room}!")
+                        st.error(f"Insufficient Stock!")
                     else:
                         ws_stock.update_cell(found_row_index, 6, new_total)
                         st.success(f"Updated: {f_code} total is now {new_total}")
                 elif trans_type == "Stock In (+)":
-                    cat = "Shoes" if selected_room == "Old Showroom" else "General"
-                    ws_stock.append_row([today_nepal, selected_room, cat, f_supp, f_code, f_qty])
-                    st.success(f"New Item {f_code} added!")
+                    # यहाँ "General" को सट्टा 'chosen_cat' प्रयोग गरिएको छ
+                    ws_stock.append_row([today_nepal, selected_room, chosen_cat, f_supp, f_code, f_qty])
+                    st.success(f"New {chosen_cat} item added!")
                 else:
                     st.error("Item not found for Stock Out.")
-                    st.cache_data.clear()
-                    t.sleep(2)
-                    st.rerun()
+                
+                st.cache_data.clear()
+                time.sleep(1)
+                st.rerun()
             except Exception as e:
                 st.error(f"Error: {e}")
-
     st.divider()
     st.subheader("Live Inventory View")
     final_data = ws_stock.get_all_values()
-    df_stock_raw = pd.DataFrame(final_data[1:], columns=final_data[0])
-    df_stock_raw.columns = [str(c).strip() for c in df_stock_raw.columns]
-    if 'Showroom' in df_stock_raw.columns:
-        filtered_df = df_stock_raw[df_stock_raw['Showroom'] == selected_room]
-        st.dataframe(filtered_df, use_container_width=True, hide_index=True)
-    else:
-        st.dataframe(df_stock_raw, use_container_width=True, hide_index=True)
+    if final_data:
+        df_stock_raw = pd.DataFrame(final_data[1:], columns=final_data[0])
+        df_stock_raw.columns = [str(c).strip() for c in df_stock_raw.columns]
+        if 'Showroom' in df_stock_raw.columns:
+            filtered_df = df_stock_raw[df_stock_raw['Showroom'] == selected_room]
+            st.dataframe(filtered_df, use_container_width=True, hide_index=True)
 elif app_mode == "Attendance": # for attendance management
     st.title("Staff HR Management")
     sh = client.open_by_key(sheet_id)
