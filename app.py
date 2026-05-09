@@ -199,11 +199,12 @@ elif app_mode == "Stock Management":
             match = supp_df[supp_df['Prefix'] == prefix]
             if not match.empty:
                 detected_supp = match.iloc[0]['Supplier']
-        display_suppliers = supp_df[supp_df['Category'] == chosen_cat]['Supplier'].tolist()
-        if not display_suppliers:
-            display_suppliers = supp_df['Supplier'].tolist()
-
-        default_idx = display_suppliers.index(detected_supp) if detected_supp in display_suppliers else 0
+    ने
+        if detected_supp in display_suppliers:
+            default_idx = display_suppliers.index(detected_supp)
+        else:
+            default_idx = 0 
+            
         f_supp = c1.selectbox("Supplier/Factory", display_suppliers, index=default_idx)
         f_qty = c3.number_input("Quantity", min_value=1, step=1)
         submitted = st.form_submit_button("Submit Transaction")
