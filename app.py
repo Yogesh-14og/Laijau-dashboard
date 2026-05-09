@@ -241,9 +241,14 @@ elif app_mode == "Stock Management":
 
     st.divider()
     st.subheader("Live Inventory View")
-    df_stock_raw = pd.DataFrame(stock_data[1:], columns=stock_data[0])
-    filtered_df = df_stock_raw[df_stock_raw['Showroom'] == selected_room]
-    st.dataframe(filtered_df, use_container_width=True, hide_index=True)
+    final_data = ws_stock.get_all_values()
+    df_stock_raw = pd.DataFrame(final_data[1:], columns=final_data[0])
+    df_stock_raw.columns = [str(c).strip() for c in df_stock_raw.columns]
+    if 'Showroom' in df_stock_raw.columns:
+        filtered_df = df_stock_raw[df_stock_raw['Showroom'] == selected_room]
+        st.dataframe(filtered_df, use_container_width=True, hide_index=True)
+    else:
+        st.dataframe(df_stock_raw, use_container_width=True, hide_index=True)
 elif app_mode == "Attendance": # for attendance management
     st.title("Staff HR Management")
     sh = client.open_by_key(sheet_id)
