@@ -178,7 +178,7 @@ elif app_mode == "Stock Management":
     ws_stock = sh.get_worksheet(2)
     
     # २. Suppliers ट्याबबाट अटोमेटिक डाटा तान्ने
-   ws_supp = sh.worksheet("Suppliers")
+    ws_supp = sh.worksheet("Suppliers")
     supp_data = ws_supp.get_all_records()
     supp_df = pd.DataFrame(supp_data)
     
