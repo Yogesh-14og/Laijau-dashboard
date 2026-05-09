@@ -198,7 +198,7 @@ elif app_mode == "Stock Management":
         # १. बारकोड स्क्यान (Main Input)
         f_code = c2.text_input("Scan Barcode / Item Code").strip().upper()        
 
-       detected_supp = None
+        detected_supp = None
         detected_cat = "" # खाली छोडिदिने, ताकि सिटबाटै आओस्
         
         if f_code:
