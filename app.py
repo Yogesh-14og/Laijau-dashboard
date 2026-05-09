@@ -234,7 +234,7 @@ elif app_mode == "Stock Management":
                 else:
                     st.error("Item not found for Stock Out.")
                     st.cache_data.clear()
-                    time.sleep(1)
+                    t.sleep(2)
                     st.rerun()
             except Exception as e:
                 st.error(f"Error: {e}")
