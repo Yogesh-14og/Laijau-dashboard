@@ -175,7 +175,7 @@ elif app_mode == "Stock Management":
     nepal_tz = pytz.timezone('Asia/Kathmandu')
     today_nepal = datetime.now(nepal_tz).strftime("%Y-%m-%d")
     sh = client.open_by_key(sheet_id)
-    ws_stock = sh.worksheet(stock)
+    ws_stock = sh.worksheet("stock")
     ws_supp = sh.worksheet("Suppliers")
     supp_data = ws_supp.get_all_records()
     supp_df = pd.DataFrame(supp_data)
