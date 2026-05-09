@@ -241,6 +241,7 @@ elif app_mode == "Stock Management":
 
     st.divider()
     st.subheader("Live Inventory View")
+    df_stock_raw = pd.DataFrame(stock_data[1:], columns=stock_data[0])
     filtered_df = df_stock_raw[df_stock_raw['Showroom'] == selected_room]
     st.dataframe(filtered_df, use_container_width=True, hide_index=True)
 elif app_mode == "Attendance": # for attendance management
