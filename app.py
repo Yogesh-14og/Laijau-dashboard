@@ -208,7 +208,7 @@ elif app_mode == "Stock Management":
                 detected_supp = match.iloc[0]['Supplier']
                 detected_cat = match.iloc[0]['Category']
         
-        all_suppliers = supp_df['Supplier'].tolist()
+            all_suppliers = supp_df['Supplier'].tolist()
         if detected_supp in all_suppliers:
             default_idx = all_suppliers.index(detected_supp)
         else:
