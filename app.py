@@ -175,7 +175,7 @@ elif app_mode == "Stock Management":
     nepal_tz = pytz.timezone('Asia/Kathmandu')
     today_nepal = datetime.now(nepal_tz).strftime("%Y-%m-%d")
     sh = client.open_by_key(sheet_id)
-    ws_stock = sh.get_worksheet(2)
+    ws_stock = sh.get_worksheet(stock)
     
     # २. Suppliers ट्याबबाट अटोमेटिक डाटा तान्ने
     ws_supp = sh.worksheet("Suppliers")
