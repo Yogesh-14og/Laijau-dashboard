@@ -169,8 +169,6 @@ if app_mode == "Sales Dashboard":
             st.success(f"Cash Pay: { (df_f['Cash'].sum() / df_f['Total'].sum())*100:.1f}%")
 elif app_mode == "Stock Management":
     st.title("Stock Inventory Control")
-    
-    # १. Session State मिलाउने (ताकि New Showroom मा बसिरहोस्)
     if 'selected_room' not in st.session_state:
         st.session_state.selected_room = "Old Showroom"
 
@@ -201,7 +199,7 @@ elif app_mode == "Stock Management":
             if not match.empty:
                 detected_supp = match.iloc[0]['Supplier Name'] 
                 
-        all_suppliers = supp_df['Supplier Name'].tolist()
+        all_suppliers = supp_df['Supplier'].tolist()
         f_supp = c1.selectbox("Supplier/Factory", all_suppliers, 
                              index=all_suppliers.index(detected_supp) if detected_supp in all_suppliers else 0)
         
@@ -225,7 +223,7 @@ elif app_mode == "Stock Management":
                     if found_row_index:
                         new_total = current_qty + f_qty if trans_type == "Stock In (+)" else current_qty - f_qty
                         if new_total < 0:
-                            st.error(f"अपसोच! {selected_room} मा यो सामानको पर्याप्त स्टक छैन।")
+                            st.error(f"Shet! {selected_room} not in stock।")
                         else:
                             ws_stock.update_cell(found_row_index, 6, new_total)
                             st.success(f"Success! {f_code} को नयाँ स्टक: {new_total}")
