@@ -175,32 +175,21 @@ elif app_mode == "Stock Management":
     nepal_tz = pytz.timezone('Asia/Kathmandu')
     today_nepal = datetime.now(nepal_tz).strftime("%Y-%m-%d")
     sh = client.open_by_key(sheet_id)
-    ws_stock = sh.get_worksheet(stock)
-    
-    # २. Suppliers ट्याबबाट अटोमेटिक डाटा तान्ने
+    ws_stock = sh.worksheet(stock)
     ws_supp = sh.worksheet("Suppliers")
     supp_data = ws_supp.get_all_records()
     supp_df = pd.DataFrame(supp_data)
-    
-    # कोलमको नाम चेक गरौँ (सिटमा जे छ त्यही हुनुपर्छ)
-    # यदि सिटमा 'Supplier Name' को सट्टा अरु केही छ भने यहाँ सच्याउनु पर्छ
     col_name = "Supplier Name" if "Supplier Name" in supp_df.columns else supp_df.columns[1] 
-
     selected_room = st.radio("Select Showroom", ["Old Showroom", "New Showroom"], 
                              index=0 if st.session_state.selected_room == "Old Showroom" else 1,
                              horizontal=True)
     st.session_state.selected_room = selected_room
 
     trans_type = st.radio("Action", ["Stock In (+)", "Stock Out (-)"], index=0, horizontal=True)
-
-    # --- FORM सुरु ---
     with st.form("stock_form", clear_on_submit=True):
         st.subheader(f"Inventory Entry: {selected_room}")
-        c1, c2, c3 = st.columns(3)
-        
-        f_code = c2.text_input("Scan Barcode / Item Code").strip().upper()
-        
-        # प्रिफिक्स लोजिक
+        c1, c2, c3 = st.columns(3)  
+        f_code = c2.text_input("Scan Barcode / Item Code").strip().upper()        
         detected_supp = None
         if f_code:
             prefix = f_code[:2]
@@ -208,16 +197,10 @@ elif app_mode == "Stock Management":
             if not match.empty:
                 detected_supp = match.iloc[0][col_name]
         
-        # सप्लायर लिस्ट
         all_suppliers = supp_df[col_name].tolist()
-        
-        # यदि सप्लायर भेटियो भने त्यसलाई नै डिफल्ट राख्ने
         default_idx = all_suppliers.index(detected_supp) if detected_supp in all_suppliers else 0
         f_supp = c1.selectbox("Supplier/Factory", all_suppliers, index=default_idx)
-        
         f_qty = c3.number_input("Quantity", min_value=1, step=1)
-
-        # यो बटन 'with st.form' को ठ्याक्कै भित्र हुनुपर्छ
         submitted = st.form_submit_button("Submit Transaction")
 
     # --- FORM को काम (बटन थिचेपछि मात्र) ---
@@ -226,7 +209,6 @@ elif app_mode == "Stock Management":
             st.warning("Item code empty!")
         else:
             try:
-                # सिट अपडेट गर्ने लोजिक यहाँ (अघिकै जस्तै)
                 all_rows = ws_stock.get_all_values()
                 found_row_index = None
                 current_qty = 0
@@ -251,10 +233,9 @@ elif app_mode == "Stock Management":
                     st.success(f"New Item {f_code} added!")
                 else:
                     st.error("Item not found for Stock Out.")
-                
-                st.cache_data.clear()
-                time.sleep(1)
-                st.rerun()
+                    st.cache_data.clear()
+                    time.sleep(1)
+                    st.rerun()
             except Exception as e:
                 st.error(f"Error: {e}")
 
