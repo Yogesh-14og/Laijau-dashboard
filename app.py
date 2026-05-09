@@ -169,24 +169,44 @@ if app_mode == "Sales Dashboard":
             st.success(f"Cash Pay: { (df_f['Cash'].sum() / df_f['Total'].sum())*100:.1f}%")
 elif app_mode == "Stock Management":
     st.title("Stock Inventory Control")
+    
+    # १. Session State मिलाउने (ताकि New Showroom मा बसिरहोस्)
+    if 'selected_room' not in st.session_state:
+        st.session_state.selected_room = "Old Showroom"
+
     nepal_tz = pytz.timezone('Asia/Kathmandu')
     today_nepal = datetime.now(nepal_tz).strftime("%Y-%m-%d")
     sh = client.open_by_key(sheet_id)
     ws_stock = sh.get_worksheet(2)
-    selected_room = st.radio("Select Showroom", ["Old Showroom", "New Showroom"], horizontal=True)
+    
+    # २. Suppliers ट्याबबाट अटोमेटिक डाटा तान्ने
+    ws_supp = sh.worksheet("Suppliers")
+    supp_df = pd.DataFrame(ws_supp.get_all_records())
+    
+    selected_room = st.radio("Select Showroom", ["Old Showroom", "New Showroom"], 
+                             index=0 if st.session_state.selected_room == "Old Showroom" else 1,
+                             horizontal=True)
+    st.session_state.selected_room = selected_room # स्टेट अपडेट गर्ने
+
     trans_type = st.radio("Action", ["Stock In (+)", "Stock Out (-)"], index=0, horizontal=True)
-    if selected_room == "Old Showroom":
-        suppliers = ["Prasiddha", "Max", "SK", "Citizen", "Local Market"]
-        category = "Shoes"
-    else:
-        category = st.selectbox("Category", ["Sports Shoes", "Clothes", "Accessories"])
-        suppliers = ["Leo", "Megha Traders", "New Road"] if category == "Sports Shoes" else ["SM", "Devkota", "Star Denim", "New Road"]
+
     with st.form("stock_form", clear_on_submit=True):
         st.subheader(f"Inventory Entry: {selected_room}")
         c1, c2, c3 = st.columns(3)
-        f_supp = c1.selectbox("Supplier/Factory", suppliers)
-        f_code = c2.text_input("Item/Jutta Code")
+        f_code = c2.text_input("Scan Barcode / Item Code").strip().upper()
+        detected_supp = "Unknown"
+        if f_code:
+            prefix = f_code[:2]
+            match = supp_df[supp_df['Prefix'] == prefix]
+            if not match.empty:
+                detected_supp = match.iloc[0]['Supplier Name'] 
+                
+        all_suppliers = supp_df['Supplier Name'].tolist()
+        f_supp = c1.selectbox("Supplier/Factory", all_suppliers, 
+                             index=all_suppliers.index(detected_supp) if detected_supp in all_suppliers else 0)
+        
         f_qty = c3.number_input("Quantity", min_value=1, step=1)
+
         if st.form_submit_button("Submit Transaction"):
             if not f_code:
                 st.warning("Item code empty!")
@@ -197,30 +217,35 @@ elif app_mode == "Stock Management":
                     current_qty = 0
                     for i, row in enumerate(all_rows[1:]):
                         if str(row[1]).strip().upper() == selected_room.strip().upper() and \
-                           str(row[4]).strip().upper() == f_code.strip().upper():
+                           str(row[4]).strip().upper() == f_code:
                             found_row_index = i + 2
                             current_qty = int(row[5]) if str(row[5]).isdigit() else 0
                             break
+
                     if found_row_index:
                         new_total = current_qty + f_qty if trans_type == "Stock In (+)" else current_qty - f_qty
                         if new_total < 0:
-                            st.error("Insufficient Stock!")
+                            st.error(f"अपसोच! {selected_room} मा यो सामानको पर्याप्त स्टक छैन।")
                         else:
                             ws_stock.update_cell(found_row_index, 6, new_total)
-                            st.success(f"Updated: {f_code} total is now {new_total}")
+                            st.success(f"Success! {f_code} को नयाँ स्टक: {new_total}")
                     elif trans_type == "Stock In (+)":
-                        ws_stock.append_row([today_nepal, selected_room, category, f_supp, f_code, f_qty])
-                        st.success(f"New Item {f_code} added!")
+                        cat = "Shoes" if selected_room == "Old Showroom" else "General"
+                        ws_stock.append_row([today_nepal, selected_room, cat, f_supp, f_code, f_qty])
+                        st.success(f"New Item {f_code} added to {selected_room}!")
                     else:
-                        st.error("Item not found for Stock Out.")                  
+                        st.error("There is no any product")
+
                     st.cache_data.clear()
-                    t.sleep(1)
+                    time.sleep(1)
                     st.rerun()
                 except Exception as e:
                     st.error(f"Error: {e}")
+
     st.divider()
-    st.subheader("Current Inventory Status")
-    st.dataframe(df_stock_raw, use_container_width=True, hide_index=True)
+    st.subheader("Live Inventory View")
+    filtered_df = df_stock_raw[df_stock_raw['Showroom'] == selected_room]
+    st.dataframe(filtered_df, use_container_width=True, hide_index=True)
 elif app_mode == "Attendance": # for attendance management
     st.title("Staff HR Management")
     sh = client.open_by_key(sheet_id)
