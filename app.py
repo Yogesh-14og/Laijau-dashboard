@@ -203,6 +203,7 @@ elif app_mode == "Stock Management":
         if f_code and detected_supp != "Unknown":
             st.info(f"Supplier Identified: **{detected_supp}**")
         elif f_code:
+            st.write(f"Testing Prefix: {f_code[:2]}")
             st.warning(" Prefix not recognized!")
 
         submitted = st.form_submit_button("Submit Transaction")
