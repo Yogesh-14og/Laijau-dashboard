@@ -188,40 +188,32 @@ elif app_mode == "Stock Management":
     with st.form("stock_form", clear_on_submit=True):
         st.subheader(f"Inventory Entry: {selected_room}")
         c1, c2, c3 = st.columns(3)    
-        
-        f_code = c2.text_input("Scan Barcode / Item Code").strip().upper()        
-        detected_supp = None
-        detected_cat = ""         
-        
+        f_code = c2.text_input("Scan Barcode / Item Code").strip().upper()                
+        detected_supp = "Unknown"
         if f_code:
             prefix = f_code[:2]
             match = supp_df[supp_df['Prefix'] == prefix]
             if not match.empty:
                 detected_supp = match.iloc[0]['Supplier']
-                detected_cat = match.iloc[0]['Category']
-        
-        all_suppliers = supp_df['Supplier'].tolist()
-        
-        if detected_supp in all_suppliers:
-            default_idx = all_suppliers.index(detected_supp)
-        else:
-            default_idx = 0 
-            
-        f_supp = c1.selectbox("Supplier/Factory", all_suppliers, index=default_idx)
+                
+        all_categories = sorted(list(set(supp_df['Category'].tolist())))
+        f_cat = c1.selectbox("Select Category", all_categories)
         f_qty = c3.number_input("Quantity", min_value=1, step=1)
         
-        if f_code and detected_supp:
-            st.info(f"Detected: {detected_cat} | {detected_supp}")
+        if f_code and detected_supp != "Unknown":
+            st.info(f"Supplier Identified: **{detected_supp}**")
+        elif f_code:
+            st.warning(" Prefix not recognized!")
 
         submitted = st.form_submit_button("Submit Transaction")
-
+        
     if submitted: 
         if not f_code:
             st.warning("Item code empty!")
-        elif not detected_supp:
-            st.error(f"Prefix '{f_code[:2]}' not found in Suppliers sheet!")
+        elif detected_supp == "Unknown":
+            st.error(f"Prefix '{f_code[:2]}' 's product no found")
         else:
-            try:
+            try:                
                 all_rows = ws_stock.get_all_values()
                 found_row_index = None
                 current_qty = 0
