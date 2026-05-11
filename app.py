@@ -169,37 +169,29 @@ if app_mode == "Sales Dashboard":
             st.success(f"Cash Pay: { (df_f['Cash'].sum() / df_f['Total'].sum())*100:.1f}%")
 elif app_mode == "Stock Management":
     st.title("Stock Inventory Control")
-    
-    # Session State मिलाउने
     if 'selected_room' not in st.session_state:
         st.session_state.selected_room = "Old Showroom"
-
-    # समय र सिट लोड गर्ने
+        
     nepal_tz = pytz.timezone('Asia/Kathmandu')
     today_nepal = datetime.now(nepal_tz).strftime("%Y-%m-%d")
     sh = client.open_by_key(sheet_id)
     ws_stock = sh.worksheet("stock")
     ws_supp = sh.worksheet("Suppliers")
-    
-    # सप्लायर डाटा तान्ने
     supp_df = pd.DataFrame(ws_supp.get_all_records())
-
+    
     selected_room = st.radio("Select Showroom", ["Old Showroom", "New Showroom"], 
                              index=0 if st.session_state.selected_room == "Old Showroom" else 1,
                              horizontal=True)
     st.session_state.selected_room = selected_room
-
     trans_type = st.radio("Action", ["Stock In (+)", "Stock Out (-)"], index=0, horizontal=True)
-
+    
     with st.form("stock_form", clear_on_submit=True):
         st.subheader(f"Inventory Entry: {selected_room}")
         c1, c2, c3 = st.columns(3)    
         
-        # १. बारकोड स्क्यान (Main Input)
         f_code = c2.text_input("Scan Barcode / Item Code").strip().upper()        
-
         detected_supp = None
-        detected_cat = "" # खाली छोडिदिने, ताकि सिटबाटै आओस्
+        detected_cat = ""         
         
         if f_code:
             prefix = f_code[:2]
@@ -208,7 +200,8 @@ elif app_mode == "Stock Management":
                 detected_supp = match.iloc[0]['Supplier']
                 detected_cat = match.iloc[0]['Category']
         
-            all_suppliers = supp_df['Supplier'].tolist()
+        all_suppliers = supp_df['Supplier'].tolist()
+        
         if detected_supp in all_suppliers:
             default_idx = all_suppliers.index(detected_supp)
         else:
@@ -220,9 +213,9 @@ elif app_mode == "Stock Management":
         if f_code and detected_supp:
             st.info(f"Detected: {detected_cat} | {detected_supp}")
 
-    submitted = st.form_submit_button("Submit Transaction")
+        submitted = st.form_submit_button("Submit Transaction")
 
-    if submitted: #submit logic
+    if submitted: 
         if not f_code:
             st.warning("Item code empty!")
         elif not detected_supp:
@@ -233,7 +226,6 @@ elif app_mode == "Stock Management":
                 found_row_index = None
                 current_qty = 0
                 
-                # पहिले नै स्टकमा छ कि छैन चेक गर्ने
                 for i, row in enumerate(all_rows[1:]):
                     if str(row[1]).strip().upper() == selected_room.strip().upper() and \
                        str(row[4]).strip().upper() == f_code:
@@ -247,23 +239,21 @@ elif app_mode == "Stock Management":
                         st.error(f"Insufficient Stock!")
                     else:
                         ws_stock.update_cell(found_row_index, 6, new_total)
-                        # अपडेट गर्दा पनि सही क्याटेगोरी बस्ने सुनिश्चित गर्ने
                         ws_stock.update_cell(found_row_index, 3, detected_cat)
                         st.success(f"Updated: {f_code} total is {new_total}")
                 elif trans_type == "Stock In (+)":
-                    # नयाँ सामान हाल्दा डिटेक्ट भएकै क्याटेगोरी हाल्ने
                     ws_stock.append_row([today_nepal, selected_room, detected_cat, f_supp, f_code, f_qty])
                     st.success(f"Added new {detected_cat} item!")
                 else:
                     st.error("Item not found for Stock Out.")
                 
                 st.cache_data.clear()
-                t.sleep(1)
+                import time
+                t.sleep(1) 
                 st.rerun()
             except Exception as e:
                 st.error(f"Error: {e}")
-
-    # ५. लाइभ भ्यु
+                
     st.divider()
     st.subheader("Live Inventory View")
     final_data = ws_stock.get_all_values()
