@@ -220,7 +220,7 @@ elif app_mode == "Stock Management":
         if f_code and detected_supp:
             st.info(f"Detected: {detected_cat} | {detected_supp}")
 
-        submitted = st.form_submit_button("Submit Transaction")
+    submitted = st.form_submit_button("Submit Transaction")
 
     if submitted: #submit logic
         if not f_code:
