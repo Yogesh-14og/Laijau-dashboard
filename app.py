@@ -189,7 +189,7 @@ elif app_mode == "Stock Management":
         st.subheader(f"Inventory Entry: {selected_room}")
         c1, c2, c3 = st.columns(3)    
         f_code = c2.text_input("Scan Barcode / Item Code").strip().upper()                
-        detected_supp = "Unknown"
+        f_supp = "Unknown"
         if f_code:
             prefix = f_code[:2]
             match = supp_df[supp_df['Prefix'] == prefix]
@@ -210,7 +210,7 @@ elif app_mode == "Stock Management":
     if submitted: 
         if not f_code:
             st.warning("Item code empty!")
-        elif detected_supp == "Unknown":
+        elif f_supp == "Unknown":
             st.error(f"Prefix '{f_code[:2]}' 's product no found")
         else:
             try:                
