@@ -194,7 +194,7 @@ elif app_mode == "Stock Management":
             prefix = f_code[:2]
             match = supp_df[supp_df['Prefix'] == prefix]
             if not match.empty:
-                detected_supp = match.iloc[0]['Supplier']
+                f_supp = match.iloc[0]['Supplier']
                 
         all_categories = sorted(list(set(supp_df['Category'].tolist())))
         f_cat = c1.selectbox("Select Category", all_categories)
