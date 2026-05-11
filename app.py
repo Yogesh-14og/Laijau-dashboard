@@ -193,12 +193,7 @@ elif app_mode == "Stock Management":
         f_supp = "Unknown"
         
         if f_code and not supp_df.empty:
-            # १. बारकोडको सुरुको २ अक्षर लिने
             prefix_to_match = f_code[:2]
-            
-            # २. 'Column Name' मा भर नपर्ने तरिका:
-            # मानौँ 'Prefix' पहिलो कोलम हो (index 0) र 'Supplier' दोस्रो (index 1)
-            # यसले कोलमको नाम 'Prefix' भए पनि वा 'P' भए पनि काम गर्छ
             try:
                 # सबै कोलमको नाम सफा गर्ने (Trailing spaces हटाउन)
                 supp_df.columns = [str(c).strip() for c in supp_df.columns]
@@ -250,11 +245,11 @@ elif app_mode == "Stock Management":
                         st.error(f"Insufficient Stock!")
                     else:
                         ws_stock.update_cell(found_row_index, 6, new_total)
-                        ws_stock.update_cell(found_row_index, 3, detected_cat)
+                        ws_stock.update_cell(found_row_index, 3, f_cat)
                         st.success(f"Updated: {f_code} total is {new_total}")
                 elif trans_type == "Stock In (+)":
                     ws_stock.append_row([today_nepal, selected_room, f_cat, f_supp, f_code, f_qty])
-                    st.success(f"Added new {f_cat} item!")
+                    st.toast(f"Added new {f_cat} item!")
                 else:
                     st.error("Item not found for Stock Out.")
                 
