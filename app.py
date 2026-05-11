@@ -234,7 +234,7 @@ elif app_mode == "Stock Management":
                         ws_stock.update_cell(found_row_index, 3, detected_cat)
                         st.success(f"Updated: {f_code} total is {new_total}")
                 elif trans_type == "Stock In (+)":
-                    ws_stock.append_row([today_nepal, selected_room, detected_cat, f_supp, f_code, f_qty])
+                    ws_stock.append_row([today_nepal, selected_room, f_cat, f_supp, f_code, f_qty])
                     st.success(f"Added new {f_cat} item!")
                 else:
                     st.error("Item not found for Stock Out.")
