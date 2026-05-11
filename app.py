@@ -188,26 +188,44 @@ elif app_mode == "Stock Management":
     with st.form("stock_form", clear_on_submit=True):
         st.subheader(f"Inventory Entry: {selected_room}")
         c1, c2, c3 = st.columns(3)    
+        
         f_code = c2.text_input("Scan Barcode / Item Code").strip().upper()                
         f_supp = "Unknown"
-        if f_code:
-            prefix = f_code[:2]
-            match = supp_df[supp_df['Prefix'] == prefix]
-            if not match.empty:
-                f_supp = match.iloc[0]['Supplier']
+        
+        if f_code and not supp_df.empty:
+            # १. बारकोडको सुरुको २ अक्षर लिने
+            prefix_to_match = f_code[:2]
+            
+            # २. 'Column Name' मा भर नपर्ने तरिका:
+            # मानौँ 'Prefix' पहिलो कोलम हो (index 0) र 'Supplier' दोस्रो (index 1)
+            # यसले कोलमको नाम 'Prefix' भए पनि वा 'P' भए पनि काम गर्छ
+            try:
+                # सबै कोलमको नाम सफा गर्ने (Trailing spaces हटाउन)
+                supp_df.columns = [str(c).strip() for c in supp_df.columns]
                 
-        all_categories = sorted(list(set(supp_df['Category'].tolist())))
+                # 'Prefix' कोलमलाई सेलेक्ट गर्ने र म्याच गर्ने
+                # .astype(str) ले नम्बर (10) लाई टेक्स्ट ("10") बनाउँछ
+                match = supp_df[supp_df['Prefix'].astype(str).str.strip() == prefix_to_match]
+                
+                if not match.empty:
+                    f_supp = match.iloc[0]['Supplier']
+            except Exception as e:
+                st.error(f"Error matching prefix: {e}")
+                
+        # क्याटेगोरी ड्रपडाउन (यो सधैँ देखिन्छ)
+        all_categories = sorted(list(set(supp_df['Category'].tolist()))) if not supp_df.empty else []
         f_cat = c1.selectbox("Select Category", all_categories)
+        
         f_qty = c3.number_input("Quantity", min_value=1, step=1)
         
-        if f_code and detected_supp != "Unknown":
-            st.info(f"Supplier Identified: **{detected_supp}**")
-        elif f_code:
-            st.write(f"Testing Prefix: {f_code[:2]}")
-            st.warning(" Prefix not recognized!")
+        # ३. फिडब्याक दिने
+        if f_code:
+            if f_supp != "Unknown":
+                st.info(f"✅ Supplier: **{f_supp}**")
+            else:
+                st.warning(f"⚠️ Prefix '{f_code[:2]}' Not Found! (सिटमा चेक गर्नुस्)")
 
-        submitted = st.form_submit_button("Submit Transaction")
-        
+        submitted = st.form_submit_button("Submit Transaction")        
     if submitted: 
         if not f_code:
             st.warning("Item code empty!")
