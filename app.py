@@ -4,19 +4,24 @@ import plotly.express as px
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import time as t
-from datetime import datetime,time
+from datetime import datetime, time
 import pytz
+
 st.set_page_config(page_title="Laijau Dashboard v2.0", layout="wide")
+
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
+
 @st.cache_resource
 def get_gspread_client():
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
     creds_info = st.secrets["google_sheets"]
     creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_info, scope)
     return gspread.authorize(creds)
+
 client = get_gspread_client()
 sheet_id = st.secrets["spreadsheet_id"]
+
 def login_ui():
     st.markdown("""
     <style>
@@ -72,14 +77,15 @@ def login_ui():
                     except Exception as e:
                         st.error(f"Configuration Error: {e}")
                         st.info("Tip: Make sure .streamlit/secrets.toml is saved and formatted correctly.")
+
 if not st.session_state.logged_in:
     login_ui()
     st.stop()
-@st.cache_data(ttl=60)
-def load_all_data():
+
+# 🌟 गुगललाई बचाउन मुख्य डाटा लोड फंक्सन
+def load_all_data_from_google():
     if not sheet_id:
-            st.error("Spreadsheet ID फेला परेन। कृपया Secrets चेक गर्नुहोला।")
-            return pd.DataFrame(), pd.DataFrame()
+        return pd.DataFrame(), pd.DataFrame()
     sh = client.open_by_key(sheet_id)
     try:
         sales_dfs = []
@@ -96,13 +102,24 @@ def load_all_data():
                 df_sales[col] = pd.to_numeric(df_sales[col], errors="coerce").fillna(0)
         df_sales["Date"] = pd.to_datetime(df_sales["Date"].astype(str) + " 2026", errors='coerce')
         df_sales = df_sales.dropna(subset=["Date"]).sort_values("Date")
+        
         ws_stock = sh.get_worksheet(2)
         df_stock = pd.DataFrame(ws_stock.get_all_records())
         return df_sales, df_stock
     except Exception as e:
-        st.error(f"Data Load Error: {e}")
+        st.error(f"Initial Cloud Load Error: {e}")
         return pd.DataFrame(), pd.DataFrame()
-df_sales_raw, df_stock_raw = load_all_data()
+
+# 🌟 डाटालाई सेसन स्टेटमा राख्ने ताकि पटक-पटक गुगलबाट डाउनलोड गर्नुनपरोस् (Anti-429 Logic)
+if "sales_data" not in st.session_state or "stock_data" not in st.session_state:
+    with st.spinner("Fetching data securely from Google Sheets..."):
+        df_sales_raw, df_stock_raw = load_all_data_from_google()
+        st.session_state.sales_data = df_sales_raw
+        st.session_state.stock_data = df_stock_raw
+else:
+    df_sales_raw = st.session_state.sales_data
+    df_stock_raw = st.session_state.stock_data
+
 with st.sidebar:
     st.markdown("""
         <div style='text-align: center; padding: 10px; background-color: #1E1E1E; border-radius: 10px; margin-bottom: 20px; border: 1px solid #333;'>
@@ -114,14 +131,24 @@ with st.sidebar:
     st.markdown("<h3 class='sidebar-nav' style='color: #F8FAFC;'>Navigation</h3>", unsafe_allow_html=True)
     app_mode = st.radio("Select Module", ["Sales Dashboard", "Stock Management", "Attendance"])
     st.divider()
+    
+    # 🔄 जतिबेला इच्छा लाग्छ, म्यानुअल रिफ्रेस गर्न साइडबारमा बटन
+    if st.button("🔄 Force Refresh Cloud Data", use_container_width=True):
+        del st.session_state.sales_data
+        del st.session_state.stock_data
+        st.rerun()
+
     st.markdown("### System Status")
     st.success("🟢 System Online")
     refresh = st.checkbox("Auto-refresh (Live Mode)")
     if st.button("Logout", use_container_width=True):
+        if "sales_data" in st.session_state: del st.session_state.sales_data
+        if "stock_data" in st.session_state: del st.session_state.stock_data
         st.session_state.logged_in = False
         st.rerun()
         st.markdown("---")
         st.caption(f"Logged in as: Admin | {datetime.date.today().strftime('%Y-%m-%d')}")  
+
 if app_mode == "Sales Dashboard":
     st.title("Sales Analysis")    
     with st.expander("Filters", expanded=True):
@@ -167,6 +194,7 @@ if app_mode == "Sales Dashboard":
         with c2:
             st.info(f"Online Pay: { (df_f['Online'].sum() / df_f['Total'].sum())*100:.1f}%")
             st.success(f"Cash Pay: { (df_f['Cash'].sum() / df_f['Total'].sum())*100:.1f}%")
+
 elif app_mode == "Stock Management":
     st.title("Stock Inventory Control")
     if 'selected_room' not in st.session_state:
@@ -175,7 +203,6 @@ elif app_mode == "Stock Management":
     nepal_tz = pytz.timezone('Asia/Kathmandu')
     today_nepal = datetime.now(nepal_tz).strftime("%Y-%m-%d")
     
-    # गुगल शीट कनेक्ट गर्ने
     sh = client.open_by_key(sheet_id)
     ws_stock = sh.worksheet("stock")
     ws_supp = sh.worksheet("Suppliers")
@@ -192,7 +219,7 @@ elif app_mode == "Stock Management":
         c1, c2, c3 = st.columns(3)    
         
         f_code = c2.text_input("Scan Barcode / Item Code").strip().upper()                
-        f_supp = ""  # प्रिफिक्स म्याच नभए खाली बस्छ, एरर आउँदैन
+        f_supp = ""  
         
         if f_code and not supp_df.empty:
             prefix_to_match = f_code[:2]
@@ -212,7 +239,7 @@ elif app_mode == "Stock Management":
             if f_supp:
                 st.info(f"✅ Supplier: **{f_supp}**")
             else:
-                st.caption(f"ℹ️ Code-Only Entry (Prefix '{f_code[:2]}' not in Suppliers list)")
+                st.caption(f"ℹ️ Code-Only Entry mode.")
 
         submitted = st.form_submit_button("Submit Transaction")        
         
@@ -220,66 +247,75 @@ elif app_mode == "Stock Management":
         if not f_code:
             st.warning("Item code empty!")
         else:
-            with st.spinner("Processing Cloud Inventory..."):
+            with st.spinner("Updating Cloud Inventory Safely..."):
                 try:                
                     found_row_index = None
                     current_qty = 0
+                    found_df_idx = None
                     
-                    # 🌟 कोटा बचाउने महा-मन्त्र:
-                    # गुगलबाट 'get_all_values()' फेरि डाउनलोड नगर्ने!
-                    # माथि पहिल्यै लोड भइसकेको 'df_stock_raw' भित्रै खुरुखुरु खोज्ने
                     if not df_stock_raw.empty:
                         df_stock_raw.columns = [str(c).strip() for c in df_stock_raw.columns]
                         
-                        # डेटाफ्रेममा लुप लगाएर पुराना रो र म्याचिङ आइटम खोज्ने
                         for idx, row in df_stock_raw.iterrows():
-                            # Google Sheet को पहिलो डाटा रो (Index 0) शीटको Row नम्बर 2 हुन्छ
                             if str(row.get('Showroom', '')).strip().upper() == selected_room.strip().upper() and \
                                str(row.get('Item Code', '')).strip().upper() == f_code:
                                 found_row_index = idx + 2  
                                 current_qty = int(row.get('Qty', 0)) if str(row.get('Qty', 0)).isdigit() else 0
+                                found_df_idx = idx
                                 break
 
-                    # 🔄 यदि सामान पहिले नै सिटमा भेटियो भने (ओरिजनल प्लस/माइनस फिचर)
+                    # 🔄 पुराना सामान भए प्लस/माइनस गर्ने (फिचर जस्ताको त्यस्तै)
                     if found_row_index:
                         new_total = current_qty + f_qty if trans_type == "Stock In (+)" else current_qty - f_qty
                         if new_total < 0:
-                            st.error(f"⚠️ Insufficient Stock! Current available is only {current_qty}")
+                            st.error(f"⚠️ Insufficient Stock! Available is only {current_qty}")
                         else:
-                            # ठ्याक्कै त्यही कोठामा परिमाण अपडेट गर्दिने
+                            # १. गुगल शीटमा विना कचकच सिधै एउटा सेल मात्र अपडेट हान्ने
                             ws_stock.update_cell(found_row_index, 6, new_total)
                             ws_stock.update_cell(found_row_index, 3, f_cat)
                             if f_supp:
                                 ws_stock.update_cell(found_row_index, 4, f_supp)
-                            st.success(f"🔥 Stock Updated! {f_code} total is now {new_total}")
                             
-                    # 🆕 यदि बिलकुलै नयाँ सामान हो भने पुछारमा नयाँ लाइन थप्ने
+                            # 🌟 म्याजिक: गुगलबाट फेरि डाउनलोड नगर्ने, मेमोरीमै भ्यालु अपडेट गरिदिने (No Read Request!)
+                            st.session_state.stock_data.at[found_df_idx, 'Qty'] = new_total
+                            st.session_state.stock_data.at[found_df_idx, 'Category'] = f_cat
+                            if f_supp:
+                                st.session_state.stock_data.at[found_df_idx, 'Supplier'] = f_supp
+                                
+                            st.success(f"🔥 Stock Updated! {f_code} total is now {new_total}")
+                            t.sleep(1)
+                            st.rerun()
+                            
+                    # 🆕 नयाँ सामान भए एपेन्ड गर्ने
                     elif trans_type == "Stock In (+)":
                         ws_stock.append_row([today_nepal, selected_room, f_cat, f_supp, f_code, f_qty])
-                        st.toast(f"Added new {f_cat} item!")
-                        st.success(f"✓ New Item Registered: {f_code} with {f_qty} pcs")
+                        
+                        # मेमोरीको डाटाफ्रेममा पनि नयाँ रो थपिदिने
+                        new_row_df = pd.DataFrame([{
+                            "Date": today_nepal, "Showroom": selected_room, "Category": f_cat, 
+                            "Supplier": f_supp, "Item Code": f_code, "Qty": f_qty
+                        }])
+                        st.session_state.stock_data = pd.concat([st.session_state.stock_data, new_row_df], ignore_index=True)
+                        
+                        st.success(f"✓ New Item Registered: {f_code}")
+                        t.sleep(1)
+                        st.rerun()
                     else:
                         st.error("❌ Item not found for Stock Out.")
-                    
-                    # क्यास क्लियर गरेर सिधै रिरन गर्ने
-                    st.cache_data.clear()
-                    import time
-                    t.sleep(1)
-                    st.rerun()
+                        
                 except Exception as e:
                     st.error(f"Error: {e}")
                     
     st.divider()
     st.subheader("Live Inventory View")
     
-    # गुगललाई दुःख नदिई माथिको डाटा फ्रेम सरक्क देखाउने
     if not df_stock_raw.empty:
         df_stock_raw.columns = [str(c).strip() for c in df_stock_raw.columns]
         if 'Showroom' in df_stock_raw.columns:
             filtered_df = df_stock_raw[df_stock_raw['Showroom'] == selected_room]
             st.dataframe(filtered_df, use_container_width=True, hide_index=True)
-            
-elif app_mode == "Attendance": # for attendance management
+
+elif app_mode == "Attendance":
     st.title("Staff HR Management")
     sh = client.open_by_key(sheet_id)
     ws_emp = sh.worksheet("Employees")
@@ -303,7 +339,6 @@ elif app_mode == "Attendance": # for attendance management
             ws_at.append_row([today_str, punch_in_time, "", status])
             st.toast(f"Check-in Successful for {selected_staff}")
             st.warning(f"Status: {status} | In: {punch_in_time}")
-            st.cache_data.clear()
         except Exception as e:
             st.error(f"Error: {e}")
     if col2.button("Punch Out", use_container_width=True):
@@ -321,9 +356,9 @@ elif app_mode == "Attendance": # for attendance management
                 ws_at.update_cell(found_row_index, 4, "Completed")              
                 st.toast(f"{selected_staff} Check-out: {now_out}")
                 t.sleep(2)
-                st.cache_data.clear()
                 st.rerun()
             else:
                 st.error("Punch-In record is not founded")
         except Exception as e:
+            st.error(f"Error during Punch Out: {e}")        except Exception as e:
             st.error(f"Error during Punch Out: {e}")
