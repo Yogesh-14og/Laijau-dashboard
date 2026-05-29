@@ -86,12 +86,14 @@ if not st.session_state.logged_in:
     st.stop()
 
 # 🌟 २. सबै आवश्यक डाटाहरू एकैचोटि मात्र लोड गर्ने फंक्सन
-def load_all_initial_data(spreadsheet):
+def load_all_data_from_google():
+    if not sheet_id:
+        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
     try:
         # सेल्स डाटा तान्ने
         sales_dfs = []
         for i in range(2):
-            ws = spreadsheet.get_worksheet(i)
+            ws = sh.get_worksheet(i)
             data = ws.get_all_records()
             if data:
                 tdf = pd.DataFrame(data)
@@ -105,10 +107,10 @@ def load_all_initial_data(spreadsheet):
         df_sales = df_sales.dropna(subset=["Date"]).sort_values("Date")
         
         # स्टक र सप्लायर डाटा तान्ने
-        ws_stock = spreadsheet.worksheet("stock")
+        ws_stock = sh.worksheet("stock")
         df_stock = pd.DataFrame(ws_stock.get_all_records())
         
-        ws_supp = spreadsheet.worksheet("Suppliers")
+        ws_supp = sh.worksheet("Suppliers")
         df_supp = pd.DataFrame(ws_supp.get_all_records())
         
         return df_sales, df_stock, df_supp
@@ -116,17 +118,19 @@ def load_all_initial_data(spreadsheet):
         st.error(f"Cloud Read Error: {e}")
         return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
-# 🌟 ३. सेसन स्टेटमा डाटाहरू सुरक्षित राख्ने (पटक-पटक गुगलमा जानै नदिने किल्ला)
+# 🌟 ३. सेसन स्टेटमा डाटाहरू सुरक्षित राख्ने (पटक-पटक गुगलमा जानै नदिने र्‍याम किल्ला)
+sheet_id = st.secrets["spreadsheet_id"]
 if "sales_data" not in st.session_state or "stock_data" not in st.session_state or "supp_data" not in st.session_state:
     with st.spinner("Initializing Cloud Dashboard Securely..."):
-        df_sales_raw, df_stock_raw, df_supp_raw = load_all_initial_data(sh)
+        df_sales_raw, df_stock_raw, df_supp_raw = load_all_data_from_google()
         st.session_state.sales_data = df_sales_raw
         st.session_state.stock_data = df_stock_raw
         st.session_state.supp_data = df_supp_raw
-else:
-    df_sales_raw = st.session_state.sales_data
-    df_stock_raw = st.session_state.stock_data
-    supp_df = st.session_state.supp_data
+
+# 🌟 यी तीनवटा म्यान कन्डिसन भन्दा बाहिर हुनुपर्छ ताकि 'supp_df' सधैँ एक्टिभ रहोस्
+df_sales_raw = st.session_state.sales_data
+df_stock_raw = st.session_state.stock_data
+supp_df = st.session_state.supp_data
 
 with st.sidebar:
     st.markdown("""
@@ -193,7 +197,7 @@ elif app_mode == "Stock Management":
         f_code = c2.text_input("Scan Barcode / Item Code").strip().upper()                
         f_supp = ""  
         
-        # 🌟 गुगलमा नगई सिधै मेमोरी (Memory) बाट प्रिफिक्स म्याच गर्ने
+        # 🔍 गुगलमा नगई सिधै मेमोरी (Memory) बाट प्रिफिक्स म्याच गर्ने
         if f_code and not supp_df.empty:
             prefix_to_match = f_code[:2]
             try:
@@ -236,9 +240,9 @@ elif app_mode == "Stock Management":
                                 found_df_idx = idx
                                 break
 
-                    ws_stock = sh.worksheet("stock") # क्यास रिसोर्सबाट चलाउने
+                    ws_stock = sh.worksheet("stock")
 
-                    # 🔄 पुराना सामान भए प्लस/माइनस ओभरराइट गर्ने
+                    # 🔄 पुराना सामान भए प्लस/माइनस ओभरराइट गर्ने (फिचर जस्ताको त्यस्तै)
                     if found_row_index:
                         new_total = current_qty + f_qty if trans_type == "Stock In (+)" else current_qty - f_qty
                         if new_total < 0:
@@ -250,7 +254,7 @@ elif app_mode == "Stock Management":
                             if f_supp:
                                 ws_stock.update_cell(found_row_index, 4, f_supp)
                             
-                            # २. मेमोरीमा पनि डाटा अपडेट गरिदिने
+                            # २. मेमोरीमा पनि डाटा अपडेट गरिदिने (ताकि अर्को सेकेन्डमै अपडेट देखियोस्)
                             st.session_state.stock_data.at[found_df_idx, 'Qty'] = new_total
                             st.session_state.stock_data.at[found_df_idx, 'Category'] = f_cat
                             if f_supp:
@@ -328,4 +332,4 @@ elif app_mode == "Attendance":
             else:
                 st.error("No active Punch-In found.")
         except Exception as e:
-            st.error(f"Error: {e}")     
+            st.error(f"Error: {e}")
