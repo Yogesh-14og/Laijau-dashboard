@@ -174,6 +174,8 @@ elif app_mode == "Stock Management":
         
     nepal_tz = pytz.timezone('Asia/Kathmandu')
     today_nepal = datetime.now(nepal_tz).strftime("%Y-%m-%d")
+    
+    # गुगल शीट कनेक्ट गर्ने
     sh = client.open_by_key(sheet_id)
     ws_stock = sh.worksheet("stock")
     ws_supp = sh.worksheet("Suppliers")
@@ -187,32 +189,30 @@ elif app_mode == "Stock Management":
     
     with st.form("stock_form", clear_on_submit=True):
         st.subheader(f"Inventory Entry: {selected_room}")
-        c1, c2, c3 = st.columns(3)        
+        c1, c2, c3 = st.columns(3)    
         
         f_code = c2.text_input("Scan Barcode / Item Code").strip().upper()                
-        f_supp = ""  
+        f_supp = ""  # प्रिफिक्स म्याच नभए खाली बस्छ, एरर आउँदैन
         
         if f_code and not supp_df.empty:
             prefix_to_match = f_code[:2]
             try:
                 supp_df.columns = [str(c).strip() for c in supp_df.columns]
                 match = supp_df[supp_df['Prefix'].astype(str).str.strip() == prefix_to_match]
-                
                 if not match.empty:
                     f_supp = match.iloc[0]['Supplier']
             except Exception as e:
-                st.error(f"Error matching prefix: {e}")
+                pass
                 
         all_categories = sorted(list(set(supp_df['Category'].tolist()))) if not supp_df.empty else []
         f_cat = c1.selectbox("Select Category", all_categories)
-        
         f_qty = c3.number_input("Quantity", min_value=1, step=1)
         
         if f_code:
             if f_supp:
-                st.info(f"Known Supplier Detected: **{f_supp}**")
+                st.info(f"✅ Supplier: **{f_supp}**")
             else:
-                st.caption(f"Code prefix '{f_code[:2]}' not registered. Saving as code-only entry.")
+                st.caption(f"ℹ️ Code-Only Entry (Prefix '{f_code[:2]}' not in Suppliers list)")
 
         submitted = st.form_submit_button("Submit Transaction")        
         
@@ -220,50 +220,61 @@ elif app_mode == "Stock Management":
         if not f_code:
             st.warning("Item code empty!")
         else:
-            try:                
-                all_rows = ws_stock.get_all_values()
-                found_row_index = None
-                current_qty = 0
-                
-                for i, row in enumerate(all_rows[1:]):
-                    if str(row[1]).strip().upper() == selected_room.strip().upper() and \
-                       str(row[4]).strip().upper() == f_code:
-                        found_row_index = i + 2
-                        current_qty = int(row[5]) if str(row[5]).isdigit() else 0
-                        break
-
-                if found_row_index:
-                    new_total = current_qty + f_qty if trans_type == "Stock In (+)" else current_qty - f_qty
-                    if new_total < 0:
-                        st.error(f"Insufficient Stock!")
-                    else:
-                        ws_stock.update_cell(found_row_index, 6, new_total)
-                        ws_stock.update_cell(found_row_index, 3, f_cat)
-                        if f_supp:
-                            ws_stock.update_cell(found_row_index, 4, f_supp)
-                        st.success(f"Updated: {f_code} total is {new_total}")
+            with st.spinner("Processing Cloud Inventory..."):
+                try:                
+                    found_row_index = None
+                    current_qty = 0
+                    
+                    # 🌟 कोटा बचाउने महा-मन्त्र:
+                    # गुगलबाट 'get_all_values()' फेरि डाउनलोड नगर्ने!
+                    # माथि पहिल्यै लोड भइसकेको 'df_stock_raw' भित्रै खुरुखुरु खोज्ने
+                    if not df_stock_raw.empty:
+                        df_stock_raw.columns = [str(c).strip() for c in df_stock_raw.columns]
                         
-                elif trans_type == "Stock In (+)":
-                    ws_stock.append_row([today_nepal, selected_room, f_cat, f_supp, f_code, f_qty])
-                    st.toast(f"Added new {f_cat} item!")
-                else:
-                    st.error("Item not found for Stock Out.")
-                
-                st.cache_data.clear()
-                import time
-                t.sleep(1) 
-                st.rerun()
-            except Exception as e:
-                st.error(f"Error: {e}")
-                
+                        # डेटाफ्रेममा लुप लगाएर पुराना रो र म्याचिङ आइटम खोज्ने
+                        for idx, row in df_stock_raw.iterrows():
+                            # Google Sheet को पहिलो डाटा रो (Index 0) शीटको Row नम्बर 2 हुन्छ
+                            if str(row.get('Showroom', '')).strip().upper() == selected_room.strip().upper() and \
+                               str(row.get('Item Code', '')).strip().upper() == f_code:
+                                found_row_index = idx + 2  
+                                current_qty = int(row.get('Qty', 0)) if str(row.get('Qty', 0)).isdigit() else 0
+                                break
+
+                    # 🔄 यदि सामान पहिले नै सिटमा भेटियो भने (ओरिजनल प्लस/माइनस फिचर)
+                    if found_row_index:
+                        new_total = current_qty + f_qty if trans_type == "Stock In (+)" else current_qty - f_qty
+                        if new_total < 0:
+                            st.error(f"⚠️ Insufficient Stock! Current available is only {current_qty}")
+                        else:
+                            # ठ्याक्कै त्यही कोठामा परिमाण अपडेट गर्दिने
+                            ws_stock.update_cell(found_row_index, 6, new_total)
+                            ws_stock.update_cell(found_row_index, 3, f_cat)
+                            if f_supp:
+                                ws_stock.update_cell(found_row_index, 4, f_supp)
+                            st.success(f"🔥 Stock Updated! {f_code} total is now {new_total}")
+                            
+                    # 🆕 यदि बिलकुलै नयाँ सामान हो भने पुछारमा नयाँ लाइन थप्ने
+                    elif trans_type == "Stock In (+)":
+                        ws_stock.append_row([today_nepal, selected_room, f_cat, f_supp, f_code, f_qty])
+                        st.toast(f"Added new {f_cat} item!")
+                        st.success(f"✓ New Item Registered: {f_code} with {f_qty} pcs")
+                    else:
+                        st.error("❌ Item not found for Stock Out.")
+                    
+                    # क्यास क्लियर गरेर सिधै रिरन गर्ने
+                    st.cache_data.clear()
+                    import time
+                    t.sleep(1)
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error: {e}")
+                    
     st.divider()
     st.subheader("Live Inventory View")
-    final_data = ws_stock.get_all_values()
-    if final_data:
-        df_stock_raw = pd.DataFrame(final_data[1:], columns=final_data[0])
+    
+    # गुगललाई दुःख नदिई माथिको डाटा फ्रेम सरक्क देखाउने
+    if not df_stock_raw.empty:
         df_stock_raw.columns = [str(c).strip() for c in df_stock_raw.columns]
-        
-        # सुरक्षाको लागि चेक: सिटमा डाटाहरू फिल्टर गरेर देखाउने
         if 'Showroom' in df_stock_raw.columns:
             filtered_df = df_stock_raw[df_stock_raw['Showroom'] == selected_room]
             st.dataframe(filtered_df, use_container_width=True, hide_index=True)
