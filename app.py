@@ -187,19 +187,15 @@ elif app_mode == "Stock Management":
     
     with st.form("stock_form", clear_on_submit=True):
         st.subheader(f"Inventory Entry: {selected_room}")
-        c1, c2, c3 = st.columns(3)    
+        c1, c2, c3 = st.columns(3)        
         
         f_code = c2.text_input("Scan Barcode / Item Code").strip().upper()                
-        f_supp = "Unknown"
+        f_supp = ""  
         
         if f_code and not supp_df.empty:
             prefix_to_match = f_code[:2]
             try:
-                # सबै कोलमको नाम सफा गर्ने (Trailing spaces हटाउन)
                 supp_df.columns = [str(c).strip() for c in supp_df.columns]
-                
-                # 'Prefix' कोलमलाई सेलेक्ट गर्ने र म्याच गर्ने
-                # .astype(str) ले नम्बर (10) लाई टेक्स्ट ("10") बनाउँछ
                 match = supp_df[supp_df['Prefix'].astype(str).str.strip() == prefix_to_match]
                 
                 if not match.empty:
@@ -207,25 +203,22 @@ elif app_mode == "Stock Management":
             except Exception as e:
                 st.error(f"Error matching prefix: {e}")
                 
-        # क्याटेगोरी ड्रपडाउन (यो सधैँ देखिन्छ)
         all_categories = sorted(list(set(supp_df['Category'].tolist()))) if not supp_df.empty else []
         f_cat = c1.selectbox("Select Category", all_categories)
         
         f_qty = c3.number_input("Quantity", min_value=1, step=1)
         
-        # ३. फिडब्याक दिने
         if f_code:
-            if f_supp != "Unknown":
-                st.info(f"✅ Supplier: **{f_supp}**")
+            if f_supp:
+                st.info(f"Known Supplier Detected: **{f_supp}**")
             else:
-                st.warning(f"⚠️ Prefix '{f_code[:2]}' Not Found! (सिटमा चेक गर्नुस्)")
+                st.caption(f"Code prefix '{f_code[:2]}' not registered. Saving as code-only entry.")
 
         submitted = st.form_submit_button("Submit Transaction")        
+        
     if submitted: 
         if not f_code:
             st.warning("Item code empty!")
-        elif f_supp == "Unknown":
-            st.error(f"Prefix '{f_code[:2]}' 's product no found")
         else:
             try:                
                 all_rows = ws_stock.get_all_values()
@@ -246,7 +239,10 @@ elif app_mode == "Stock Management":
                     else:
                         ws_stock.update_cell(found_row_index, 6, new_total)
                         ws_stock.update_cell(found_row_index, 3, f_cat)
+                        if f_supp:
+                            ws_stock.update_cell(found_row_index, 4, f_supp)
                         st.success(f"Updated: {f_code} total is {new_total}")
+                        
                 elif trans_type == "Stock In (+)":
                     ws_stock.append_row([today_nepal, selected_room, f_cat, f_supp, f_code, f_qty])
                     st.toast(f"Added new {f_cat} item!")
@@ -266,6 +262,8 @@ elif app_mode == "Stock Management":
     if final_data:
         df_stock_raw = pd.DataFrame(final_data[1:], columns=final_data[0])
         df_stock_raw.columns = [str(c).strip() for c in df_stock_raw.columns]
+        
+        # सुरक्षाको लागि चेक: सिटमा डाटाहरू फिल्टर गरेर देखाउने
         if 'Showroom' in df_stock_raw.columns:
             filtered_df = df_stock_raw[df_stock_raw['Showroom'] == selected_room]
             st.dataframe(filtered_df, use_container_width=True, hide_index=True)
