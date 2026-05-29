@@ -360,5 +360,4 @@ elif app_mode == "Attendance":
             else:
                 st.error("Punch-In record is not founded")
         except Exception as e:
-            st.error(f"Error during Punch Out: {e}")        except Exception as e:
-            st.error(f"Error during Punch Out: {e}")
+            st.error(f"Error during Punch Out: {e}")           
